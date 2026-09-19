@@ -1,0 +1,28 @@
+[project]
+name = "list-forge"
+version = "0.1.0"
+description = "Product copy generation with deterministic validation and human review routing"
+readme = "README.md"
+authors = [
+    { name = "vrosi21", email = "kemalsivro@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "openai>=3.16.2",
+    "pydantic-settings>=2.15.0",
+]
+
+[project.scripts]
+list-forge = "list_forge:main"
+
+[build-system]
+requires = ["uv_build>=0.12.16,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
+]
