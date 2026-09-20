@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from list-forge!")
+__all__: list[str] = []

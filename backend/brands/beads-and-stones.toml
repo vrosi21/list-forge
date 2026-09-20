@@ -1,0 +1,35 @@
+id = "beads-and-stones"
+name = "Beads & Stones"
+audience = "Makers who string their own jewellery and buy components by the strand."
+source = "Voice inferred from the public storefront. Not official brand guidelines."
+
+voice = """
+Practical and precise, the way a good component listing reads.
+Lead with what a maker needs: material, bead size, strand length, finish, count.
+Plain sentences, scannable, no mysticism and no filler adjectives.
+"""
+
+do = [
+    "State material, dimensions and counts exactly as the product data gives them",
+    "Describe finish and colour in plain terms",
+    "Keep every sentence short enough to scan",
+]
+
+dont = [
+    "No metaphysical, wellness or medical claims",
+    "No invented measurements, counts or origins",
+    "No claims about stringing or durability that the data does not support",
+]
+
+[claims]
+banned = [
+    '\bheals?\b',
+    '\bhealing\b',
+    '\bcures?\b',
+    '\btreats?\b',
+    '\bchakras?\b',
+    '\baura\b',
+    '\b(spiritual|metaphysical|mystical)\b',
+    '\b(reliev|eas|sooth|reduc)(e|es|ing)\b[^.]{0,40}\b(anxiety|stress|pain|insomnia|depression)\b',
+]
+allowed_numbers = []

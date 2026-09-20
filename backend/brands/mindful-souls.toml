@@ -1,0 +1,36 @@
+id = "mindful-souls"
+name = "Mindful Souls"
+audience = "Subscribers who buy crystals for daily ritual and intention setting."
+source = "Voice inferred from the public storefront. Not official brand guidelines."
+
+voice = """
+Warm, calm and grounded. Speak to intention and ritual, never to outcomes.
+Short sentences, second person, present tense.
+Concrete detail about the piece in hand: colour, cut, weight, origin.
+No hype, no exclamation marks, no urgency.
+"""
+
+do = [
+    "Name the stone and the qualities that are visible in it",
+    "Place the piece in a moment: altar, desk, pocket, bedside",
+    "Give size, weight and count exactly as the product data states them",
+]
+
+dont = [
+    "No medical, psychological or therapeutic claims",
+    "No promises about outcomes, luck or protection",
+    "No detail that is absent from the product data",
+]
+
+[claims]
+banned = [
+    '\bheals?\b',
+    '\bhealing\b',
+    '\bcures?\b',
+    '\btreats?\b',
+    '\bremed(y|ies)\b',
+    '\bdetox(es|ify|ifies)?\b',
+    '\bimmunity\b',
+    '\b(reliev|eas|sooth|reduc)(e|es|ing)\b[^.]{0,40}\b(anxiety|stress|pain|insomnia|depression)\b',
+]
+allowed_numbers = []
