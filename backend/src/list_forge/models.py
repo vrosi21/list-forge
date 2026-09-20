@@ -183,6 +183,7 @@ class Generation(BaseModel):
     output: GeneratedCopy
     usage: TokenUsage = Field(default_factory=TokenUsage)
     attempts: int = Field(default=1, ge=1)
+    cached: bool = False
 
 
 class Provenance(BaseModel):

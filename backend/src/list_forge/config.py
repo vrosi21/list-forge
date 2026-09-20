@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     backoff_base_s: float = Field(default=1.0, gt=0)
     backoff_cap_s: float = Field(default=30.0, gt=0)
 
+    max_upload_bytes: int = Field(default=1_000_000, gt=0)
+
     brands_dir: Path = BACKEND_DIR / "brands"
     data_dir: Path = REPO_ROOT / "data"
     output_dir: Path = BACKEND_DIR / "out"

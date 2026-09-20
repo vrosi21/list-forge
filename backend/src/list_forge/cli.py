@@ -24,7 +24,8 @@ from list_forge.llm import (
 from list_forge.models import BrandConfig, Item, Status, TokenUsage
 from list_forge.pipeline import Pipeline
 from list_forge.pricing import estimate_cost_usd
-from list_forge.vocabulary import VocabularyError, load_vocabulary
+from list_forge.services import build_services
+from list_forge.vocabulary import VocabularyError
 
 PREVIEW_ROWS = 5
 EXIT_OK = 0
@@ -120,29 +121,33 @@ async def _run_batch(settings: Settings, csv_path: Path, brand_id: str, limit: i
     brand, catalog = loaded
 
     try:
-        vocabulary = load_vocabulary(settings.vocabulary_path)
-        client = build_client(settings)
+        async with build_services(settings) as services:
+            catalogue_terms = services.vocabulary.extend(
+                entities=[entity for product in catalog.products for entity in product.entities],
+                origins=[product.origin for product in catalog.products if product.origin],
+            )
+            pipeline = Pipeline(
+                services.generator,
+                catalogue_terms,
+                max_concurrency=settings.max_concurrency,
+                semaphore=services.pipeline.semaphore,
+            )
+            batch, items = services.store.start_batch(brand.id, csv_path.name, catalog.products)
+            items = await pipeline.run_batch(
+                catalog.products,
+                brand,
+                batch.id,
+                on_item=services.store.save_item,
+                item_ids=[item.id for item in items],
+            )
     except (ConfigurationError, VocabularyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_UNUSABLE
-
-    vocabulary = vocabulary.extend(
-        entities=[entity for product in catalog.products for entity in product.entities],
-        origins=[product.origin for product in catalog.products if product.origin],
-    )
-    pipeline = Pipeline(
-        build_generator(settings, client),
-        vocabulary,
-        max_concurrency=settings.max_concurrency,
-    )
-
-    try:
-        items = await pipeline.run_batch(catalog.products, brand)
-    except AuthenticationError:
+    except BaseExceptionGroup as group:
+        if not any(isinstance(error, AuthenticationError) for error in group.exceptions):
+            raise
         print("error: the provider rejected the API key", file=sys.stderr)
         return EXIT_UNUSABLE
-    finally:
-        await client.close()
 
     _print_items(items)
     _print_summary(settings, items)
