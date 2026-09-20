@@ -40,8 +40,13 @@ class Settings(BaseSettings):
 
     brands_dir: Path = BACKEND_DIR / "brands"
     data_dir: Path = REPO_ROOT / "data"
+    output_dir: Path = BACKEND_DIR / "out"
     database_path: Path = BACKEND_DIR / "listforge.db"
     frontend_origin: str = "http://localhost:3000"
+
+    @property
+    def vocabulary_path(self) -> Path:
+        return self.brands_dir / "vocab.toml"
 
     def require_llm_api_key(self) -> SecretStr:
         """The API key, or a clear failure before any request is attempted."""

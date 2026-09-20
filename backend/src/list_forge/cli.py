@@ -4,7 +4,9 @@ import argparse
 import asyncio
 import logging
 import sys
+from collections import Counter
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from openai import APIStatusError, AuthenticationError
@@ -14,14 +16,15 @@ from list_forge.brands import BrandConfigError, BrandNotFoundError, list_brands,
 from list_forge.catalog import Catalog, CatalogTooLargeError, load_products
 from list_forge.config import ConfigurationError, Settings, get_settings
 from list_forge.llm import (
-    GenerationError,
     ModelUnavailableError,
     ProviderError,
     build_client,
     build_generator,
 )
-from list_forge.models import BrandConfig, ProductFacts, TokenUsage
+from list_forge.models import BrandConfig, Item, Status, TokenUsage
+from list_forge.pipeline import Pipeline
 from list_forge.pricing import estimate_cost_usd
+from list_forge.vocabulary import VocabularyError, load_vocabulary
 
 PREVIEW_ROWS = 5
 EXIT_OK = 0
@@ -44,8 +47,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_brands(settings)
     if args.command == "check":
         return asyncio.run(_run_check(settings))
-    if args.command == "generate":
-        return asyncio.run(_run_generate(settings, args.csv_path, args.brand, args.limit))
+    if args.command == "run":
+        return asyncio.run(_run_batch(settings, args.csv_path, args.brand, args.limit))
     return _run_inspect(settings, args.csv_path, args.brand, args.limit)
 
 
@@ -59,8 +62,8 @@ def _build_parser() -> argparse.ArgumentParser:
     inspect = commands.add_parser("inspect", help="validate a product CSV against a brand")
     _add_catalog_arguments(inspect)
 
-    generate = commands.add_parser("generate", help="generate copy for the first rows of a CSV")
-    _add_catalog_arguments(generate)
+    run = commands.add_parser("run", help="generate, check and route a product CSV")
+    _add_catalog_arguments(run)
     return parser
 
 
@@ -110,43 +113,41 @@ async def _run_check(settings: Settings) -> int:
     return EXIT_OK
 
 
-async def _run_generate(
-    settings: Settings, csv_path: Path, brand_id: str, limit: int | None
-) -> int:
+async def _run_batch(settings: Settings, csv_path: Path, brand_id: str, limit: int | None) -> int:
     loaded = _load(settings, csv_path, brand_id, limit)
     if loaded is None:
         return EXIT_UNUSABLE
     brand, catalog = loaded
 
     try:
+        vocabulary = load_vocabulary(settings.vocabulary_path)
         client = build_client(settings)
-    except ConfigurationError as error:
+    except (ConfigurationError, VocabularyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_UNUSABLE
 
-    generator = build_generator(settings, client)
-    failures = 0
-    total_usage = TokenUsage()
+    vocabulary = vocabulary.extend(
+        entities=[entity for product in catalog.products for entity in product.entities],
+        origins=[product.origin for product in catalog.products if product.origin],
+    )
+    pipeline = Pipeline(
+        build_generator(settings, client),
+        vocabulary,
+        max_concurrency=settings.max_concurrency,
+    )
 
     try:
-        for product in catalog.products:
-            try:
-                generation = await generator.generate(product, brand)
-            except AuthenticationError:
-                print("error: the provider rejected the API key", file=sys.stderr)
-                return EXIT_UNUSABLE
-            except (GenerationError, ProviderError) as error:
-                failures += 1
-                print(f"{product.sku:<14} FAILED  {error}", file=sys.stderr)
-                continue
-
-            total_usage = _accumulate(total_usage, generation.usage)
-            _print_generation(product, generation.output.title, generation.attempts)
+        items = await pipeline.run_batch(catalog.products, brand)
+    except AuthenticationError:
+        print("error: the provider rejected the API key", file=sys.stderr)
+        return EXIT_UNUSABLE
     finally:
         await client.close()
 
-    _print_totals(settings.llm_model, total_usage, failures)
-    return EXIT_REJECTED if failures else EXIT_OK
+    _print_items(items)
+    _print_summary(settings, items)
+    _write_results(settings, items)
+    return EXIT_REJECTED if any(item.status is not Status.APPROVED for item in items) else EXIT_OK
 
 
 def _run_inspect(settings: Settings, csv_path: Path, brand_id: str, limit: int | None) -> int:
@@ -200,21 +201,43 @@ def _accumulate(total: TokenUsage, usage: TokenUsage) -> TokenUsage:
     )
 
 
-def _print_generation(product: ProductFacts, title: str, attempts: int) -> None:
-    suffix = "" if attempts == 1 else f"  ({attempts} attempts)"
-    print(f"{product.sku:<14} {title}{suffix}")
+def _print_items(items: Sequence[Item]) -> None:
+    for item in items:
+        headline = item.output.title if item.output else (item.error or "")
+        print(f"{item.status.value:<13} {item.facts.sku:<14} {headline}")
+        for finding in item.findings:
+            print(f"    {finding.check.value:<8} {finding.field:<18} {finding.message}")
 
 
-def _print_totals(model: str, usage: TokenUsage, failures: int) -> None:
-    cost = estimate_cost_usd(model, usage)
+def _print_summary(settings: Settings, items: Sequence[Item]) -> None:
+    usage = TokenUsage()
+    for item in items:
+        if item.provenance:
+            usage = _accumulate(usage, item.provenance.usage)
+
+    counts = Counter(item.status.value for item in items)
+    cost = estimate_cost_usd(settings.llm_model, usage)
     rendered = "unpriced model" if cost is None else f"${cost:.6f} at list price"
+
+    print()
+    for status in Status:
+        if counts[status.value]:
+            print(f"{status.value:<13} {counts[status.value]}")
     print(
         f"tokens: {usage.prompt_tokens} in "
         f"({usage.cached_prompt_tokens} cached), {usage.completion_tokens} out"
     )
     print(f"cost:   {rendered}")
-    if failures:
-        print(f"failed: {failures}")
+
+
+def _write_results(settings: Settings, items: Sequence[Item]) -> None:
+    settings.output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
+    path = settings.output_dir / f"{stamp}.jsonl"
+    with path.open("w", encoding="utf-8") as handle:
+        for item in items:
+            handle.write(item.model_dump_json() + "\n")
+    print(f"written: {path}")
 
 
 def _describe(error: ValidationError) -> str:

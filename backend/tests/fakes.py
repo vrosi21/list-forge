@@ -1,5 +1,6 @@
 """Test doubles for the model provider, so tests never touch the network."""
 
+import asyncio
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -10,7 +11,14 @@ import httpx
 from openai import APIConnectionError, AuthenticationError, InternalServerError, RateLimitError
 
 from list_forge.llm import GroqGenerator
-from list_forge.models import BrandConfig, GenerationParams, ProductFacts
+from list_forge.models import (
+    BrandConfig,
+    GeneratedCopy,
+    Generation,
+    GenerationParams,
+    ProductFacts,
+    TokenUsage,
+)
 
 REQUEST = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
 
@@ -48,7 +56,7 @@ def sample_brand(**overrides: Any) -> BrandConfig:
         "voice": "Warm, calm and grounded. Short sentences.",
         "do": ["Name the stone"],
         "dont": ["No medical claims"],
-        "claims": {"banned": [r"\bheals?\b"]},
+        "claims": {"banned": [r"\bheals?\b", r"\bhealing\b"]},
     }
     return BrandConfig.model_validate(base | overrides)
 
@@ -90,6 +98,41 @@ def auth_error() -> AuthenticationError:
     return AuthenticationError(
         "invalid key", response=httpx.Response(401, request=REQUEST), body=None
     )
+
+
+class FakeGenerator:
+    """A CopyGenerator that answers from a script, so the pipeline can be tested offline."""
+
+    def __init__(
+        self,
+        replies: dict[str, GeneratedCopy | Exception] | None = None,
+        default: GeneratedCopy | Exception | None = None,
+    ) -> None:
+        self._replies = replies or {}
+        self._default = default or GeneratedCopy.model_validate(VALID_COPY)
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.seen: list[str] = []
+
+    @property
+    def params(self) -> GenerationParams:
+        return sample_params()
+
+    async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation:
+        self.in_flight += 1
+        self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0)
+            self.seen.append(facts.sku)
+            outcome = self._replies.get(facts.sku, self._default)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return Generation(
+                output=outcome,
+                usage=TokenUsage(prompt_tokens=100, cached_prompt_tokens=10, completion_tokens=50),
+            )
+        finally:
+            self.in_flight -= 1
 
 
 class FakeCompletions:

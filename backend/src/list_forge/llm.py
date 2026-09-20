@@ -60,6 +60,9 @@ class Completion:
 class CopyGenerator(Protocol):
     """The seam every caller depends on, so tests never need a network."""
 
+    @property
+    def params(self) -> GenerationParams: ...
+
     async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation: ...
 
 

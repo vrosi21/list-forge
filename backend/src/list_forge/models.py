@@ -35,7 +35,9 @@ class Severity(StrEnum):
 class CheckName(StrEnum):
     NUMBER = "number"
     ENTITY = "entity"
+    ORIGIN = "origin"
     CLAIM = "claim"
+    ABSENCE = "absence"
 
 
 def _split_multi_value(value: object) -> object:
@@ -192,7 +194,7 @@ class Provenance(BaseModel):
     params: GenerationParams
     usage: TokenUsage = Field(default_factory=TokenUsage)
     attempts: int = Field(default=0, ge=0)
-    cost_usd: Decimal = Decimal("0")
+    cost_usd: Decimal | None = None
     cache_hit: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
 

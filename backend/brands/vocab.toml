@@ -1,0 +1,32 @@
+stones = [
+    "agate", "amazonite", "amethyst", "ametrine", "apatite", "aquamarine", "aventurine",
+    "green aventurine", "azurite", "black obsidian", "black tourmaline", "bloodstone",
+    "blue lace agate", "carnelian", "celestite", "chalcedony", "chrysocolla", "citrine",
+    "clear quartz", "danburite", "dumortierite", "emerald", "fluorite", "garnet", "hematite",
+    "howlite", "jade", "jasper", "red jasper", "kunzite", "kyanite", "labradorite",
+    "lapis lazuli", "larimar", "lepidolite", "malachite", "moonstone", "morganite",
+    "moss agate", "obsidian", "onyx", "opal", "peridot", "pyrite", "quartz", "rhodonite",
+    "rose quartz", "ruby", "sapphire", "selenite", "septarian", "serpentine", "shungite",
+    "smoky quartz", "sodalite", "sunstone", "tiger's eye", "topaz", "tourmaline",
+    "turquoise", "unakite", "zoisite",
+]
+
+colours = [
+    "amber", "beige", "black", "blue", "bronze", "brown", "clear", "cream", "gold", "green",
+    "grey", "indigo", "ivory", "lavender", "lilac", "maroon", "navy", "olive", "orange",
+    "peach", "pink", "purple", "red", "rose", "silver", "teal", "turquoise", "violet",
+    "white", "yellow",
+]
+
+materials = [
+    "brass", "copper", "cotton", "cotton cord", "elastic cord", "gold plate", "hematite stand",
+    "leather", "linen", "nylon thread", "rose gold", "silk", "stainless steel",
+    "sterling silver", "suede", "velvet pouch", "wood", "wooden stand",
+]
+
+origins = [
+    "afghanistan", "africa", "australia", "brazil", "china", "colombia", "congo", "india",
+    "indonesia", "madagascar", "mexico", "morocco", "mozambique", "myanmar", "namibia",
+    "pakistan", "peru", "poland", "russia", "south africa", "sri lanka", "tanzania",
+    "thailand", "tibet", "turkey", "united states", "uruguay", "vietnam", "zambia",
+]
