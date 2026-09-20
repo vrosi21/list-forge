@@ -55,6 +55,19 @@ def test_a_word_inside_another_word_is_not_a_match() -> None:
     assert VOCABULARY.find_entities("goldsmith") == []
 
 
+def test_an_adjective_form_resolves_to_the_place() -> None:
+    vocabulary = build_vocabulary(
+        entities=["amethyst"],
+        origins=["morocco", "brazil"],
+        origin_aliases={"moroccan": "morocco", "brazilian": "brazil"},
+    )
+
+    assert [match.term for match in vocabulary.find_origins("Moroccan white selenite")] == [
+        "morocco"
+    ]
+    assert [match.term for match in vocabulary.find_origins("a Brazilian point")] == ["brazil"]
+
+
 def test_origins_are_matched_separately_from_entities() -> None:
     assert [match.term for match in VOCABULARY.find_origins("mined in Brazil")] == ["brazil"]
     assert VOCABULARY.find_entities("mined in Brazil") == []

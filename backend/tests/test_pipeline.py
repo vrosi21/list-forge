@@ -90,6 +90,22 @@ class TestConcurrency:
         assert generator.peak_in_flight <= 2
         assert len(generator.seen) == 8
 
+    async def test_waiting_for_a_free_slot_does_not_count_against_the_item_deadline(self) -> None:
+        generator = FakeGenerator(delay_s=0.02)
+        queued = Pipeline(generator, VOCABULARY, max_concurrency=1, item_timeout_s=0.05)
+
+        items = await queued.run_batch(products(5), sample_brand())
+
+        assert [item.status for item in items] == [Status.APPROVED] * 5
+
+    async def test_a_call_that_runs_past_the_deadline_still_fails(self) -> None:
+        generator = FakeGenerator(delay_s=0.2)
+        slow = Pipeline(generator, VOCABULARY, max_concurrency=2, item_timeout_s=0.02)
+
+        items = await slow.run_batch(products(2), sample_brand())
+
+        assert [item.status for item in items] == [Status.FAILED, Status.FAILED]
+
     async def test_a_higher_limit_lets_more_run_at_once(self) -> None:
         generator = FakeGenerator()
 

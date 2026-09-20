@@ -107,9 +107,11 @@ class FakeGenerator:
         self,
         replies: dict[str, GeneratedCopy | Exception] | None = None,
         default: GeneratedCopy | Exception | None = None,
+        delay_s: float = 0.0,
     ) -> None:
         self._replies = replies or {}
         self._default = default or GeneratedCopy.model_validate(VALID_COPY)
+        self._delay_s = delay_s
         self.in_flight = 0
         self.peak_in_flight = 0
         self.seen: list[str] = []
@@ -122,7 +124,7 @@ class FakeGenerator:
         self.in_flight += 1
         self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
         try:
-            await asyncio.sleep(0)
+            await asyncio.sleep(self._delay_s)
             self.seen.append(facts.sku)
             outcome = self._replies.get(facts.sku, self._default)
             if isinstance(outcome, Exception):

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "invented weight",
+    "expect": "number",
+    "description": "A single amethyst tower for your altar. It weighs 240 g and stands quietly on a shelf."
+  },
+  {
+    "name": "invented bead count",
+    "expect": "number",
+    "description": "Strung on elastic cord, the bracelet carries 19 beads and slips over the wrist."
+  },
+  {
+    "name": "invented price",
+    "expect": "number",
+    "description": "Yours for 24.90 euro, a single polished piece ready for the desk or the altar."
+  },
+  {
+    "name": "invented stone",
+    "expect": "entity",
+    "description": "Deep purple amethyst shot through with flecks of labradorite, cut and polished by hand."
+  },
+  {
+    "name": "invented material",
+    "expect": "entity",
+    "description": "The piece is finished with a sterling silver cap and sits on a polished base."
+  },
+  {
+    "name": "invented colour in colour phrasing",
+    "expect": "entity",
+    "description": "The stone shifts in gold tones as the light moves across the polished surface."
+  },
+  {
+    "name": "invented origin",
+    "expect": "origin",
+    "description": "Mined in Brazil and polished by hand, this piece rests easily on an altar shelf."
+  },
+  {
+    "name": "wrong origin when one is stated",
+    "expect": "origin",
+    "facts": { "origin": "Morocco" },
+    "description": "Quarried in India, then cut and polished for a desk, a shelf or a bedside table."
+  },
+  {
+    "name": "invented origin as an adjective",
+    "expect": "origin",
+    "description": "A Brazilian point, cut and polished by hand, ready for a desk or an altar."
+  },
+  {
+    "name": "health claim, present tense",
+    "expect": "claim",
+    "description": "This stone heals tired minds and settles the room it sits in, morning or evening."
+  },
+  {
+    "name": "health claim, gerund",
+    "expect": "claim",
+    "description": "A healing piece for your altar, cut and polished, ready for your daily ritual."
+  },
+  {
+    "name": "health claim echoing the product name",
+    "expect": "claim",
+    "facts": { "name": "Selenite Crystal Wand Cleansing Healing Tool" },
+    "description": "A healing tool for your altar, kept where the morning light reaches it first."
+  },
+  {
+    "name": "points at a missing fact",
+    "expect": "absence",
+    "description": "A single piece for your altar. Its weight is not specified, but it sits heavy."
+  },
+  {
+    "name": "points at several missing facts",
+    "expect": "absence",
+    "description": "It has no listed size or weight, and it rests quietly wherever you place it."
+  }
+]

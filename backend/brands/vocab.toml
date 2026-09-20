@@ -24,9 +24,41 @@ materials = [
     "sterling silver", "suede", "velvet pouch", "wood", "wooden stand",
 ]
 
+ambiguous = [
+    "amber", "clear", "cream", "gold", "ivory", "olive", "peach", "rose", "silver",
+]
+
 origins = [
     "afghanistan", "africa", "australia", "brazil", "china", "colombia", "congo", "india",
     "indonesia", "madagascar", "mexico", "morocco", "mozambique", "myanmar", "namibia",
     "pakistan", "peru", "poland", "russia", "south africa", "sri lanka", "tanzania",
     "thailand", "tibet", "turkey", "united states", "uruguay", "vietnam", "zambia",
 ]
+
+[origin_aliases]
+afghan = "afghanistan"
+african = "africa"
+australian = "australia"
+brazilian = "brazil"
+chinese = "china"
+colombian = "colombia"
+indian = "india"
+indonesian = "indonesia"
+madagascan = "madagascar"
+malagasy = "madagascar"
+mexican = "mexico"
+moroccan = "morocco"
+mozambican = "mozambique"
+namibian = "namibia"
+pakistani = "pakistan"
+peruvian = "peru"
+polish = "poland"
+russian = "russia"
+"sri lankan" = "sri lanka"
+tanzanian = "tanzania"
+thai = "thailand"
+tibetan = "tibet"
+turkish = "turkey"
+uruguayan = "uruguay"
+vietnamese = "vietnam"
+zambian = "zambia"

@@ -6,7 +6,7 @@ origin checks. It is compiled once and matched against every generated field.
 
 import re
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -31,19 +31,33 @@ class Match:
 class Vocabulary:
     entities: tuple[str, ...]
     origins: tuple[str, ...]
+    ambiguous: frozenset[str] = frozenset()
+    origin_aliases: tuple[tuple[str, str], ...] = ()
 
     def find_entities(self, text: str) -> list[Match]:
         return _find(self.entities, text)
 
     def find_origins(self, text: str) -> list[Match]:
-        return _find(self.origins, text)
+        """Adjective forms resolve to the place: 'Moroccan' is a claim about Morocco."""
+        aliases = dict(self.origin_aliases)
+        matches = _find((*self.origins, *aliases), text)
+        return [
+            Match(term=aliases.get(match.term, match.term), start=match.start, end=match.end)
+            for match in matches
+        ]
 
     def extend(self, entities: Iterable[str] = (), origins: Iterable[str] = ()) -> "Vocabulary":
         """A copy that also recognises terms taken from the catalogue being processed."""
         return Vocabulary(
             entities=_merge(self.entities, entities),
             origins=_merge(self.origins, origins),
+            ambiguous=self.ambiguous,
+            origin_aliases=self.origin_aliases,
         )
+
+    def is_ambiguous(self, term: str) -> bool:
+        """True for words that are colours in one sentence and plain adjectives in the next."""
+        return term in self.ambiguous
 
 
 def normalise(term: str) -> str:
@@ -51,8 +65,21 @@ def normalise(term: str) -> str:
     return WHITESPACE.sub(" ", term.replace(CURLY_APOSTROPHE, "'").strip().lower())
 
 
-def build_vocabulary(entities: Iterable[str], origins: Iterable[str]) -> Vocabulary:
-    return Vocabulary(entities=_merge((), entities), origins=_merge((), origins))
+def build_vocabulary(
+    entities: Iterable[str],
+    origins: Iterable[str],
+    ambiguous: Iterable[str] = (),
+    origin_aliases: Mapping[str, str] | None = None,
+) -> Vocabulary:
+    return Vocabulary(
+        entities=_merge((), entities),
+        origins=_merge((), origins),
+        ambiguous=frozenset(normalise(term) for term in ambiguous),
+        origin_aliases=tuple(
+            (normalise(alias), normalise(origin))
+            for alias, origin in sorted((origin_aliases or {}).items())
+        ),
+    )
 
 
 def load_vocabulary(path: Path) -> Vocabulary:
@@ -69,7 +96,18 @@ def load_vocabulary(path: Path) -> Vocabulary:
         *_strings(data, "colours", path),
         *_strings(data, "materials", path),
     ]
-    return build_vocabulary(entities, _strings(data, "origins", path))
+    aliases = data.get("origin_aliases", {})
+    if not isinstance(aliases, dict) or not all(
+        isinstance(value, str) for value in aliases.values()
+    ):
+        raise VocabularyError(f"{path.name}: origin_aliases must map a word to a place")
+
+    return build_vocabulary(
+        entities,
+        _strings(data, "origins", path),
+        _strings(data, "ambiguous", path),
+        {str(alias): str(origin) for alias, origin in aliases.items()},
+    )
 
 
 def _strings(data: dict[str, object], key: str, path: Path) -> list[str]:

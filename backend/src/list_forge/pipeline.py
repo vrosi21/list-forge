@@ -10,7 +10,16 @@ from openai import AuthenticationError
 
 from list_forge.checks import CheckSuite, build_check_suite
 from list_forge.llm import CopyGenerator, GenerationError, ProviderError
-from list_forge.models import BrandConfig, Item, ProductFacts, Provenance, Status, TokenUsage
+from list_forge.models import (
+    BrandConfig,
+    Finding,
+    GeneratedCopy,
+    Item,
+    ProductFacts,
+    Provenance,
+    Status,
+    TokenUsage,
+)
 from list_forge.pricing import estimate_cost_usd
 from list_forge.prompts import PROMPT_VERSION, build_system_prompt, prompt_fingerprint
 from list_forge.routing import route
@@ -63,8 +72,9 @@ class Pipeline:
         fingerprint = prompt_fingerprint(build_system_prompt(brand), self._generator.params)
 
         try:
-            async with asyncio.timeout(self._item_timeout_s), self._semaphore:
-                generation = await self._generator.generate(facts, brand)
+            async with self._semaphore:
+                async with asyncio.timeout(self._item_timeout_s):
+                    generation = await self._generator.generate(facts, brand)
         except AuthenticationError:
             raise
         except (GenerationError, ProviderError, TimeoutError) as error:
@@ -102,8 +112,8 @@ class Pipeline:
         fingerprint: str,
         *,
         status: Status,
-        output: object = None,
-        findings: Sequence[object] = (),
+        output: GeneratedCopy | None = None,
+        findings: Sequence[Finding] = (),
         usage: TokenUsage | None = None,
         attempts: int = 0,
         error: str | None = None,

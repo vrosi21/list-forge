@@ -1,0 +1,31 @@
+[
+  {
+    "name": "facts only",
+    "description": "A single amethyst tower in purple and white. Place it where the morning light lands."
+  },
+  {
+    "name": "ambiguous colour word as an ordinary adjective",
+    "description": "White selenite, clear and smooth under the thumb, cut into a single polished wand.",
+    "facts": { "stones": "selenite", "colours": "white" }
+  },
+  {
+    "name": "numbers taken from the facts",
+    "description": "It measures 200 mm and weighs 150 g, a single piece cut and polished by hand.",
+    "facts": { "size_mm": "200", "weight_g": "150" }
+  },
+  {
+    "name": "the stated origin may be named",
+    "description": "Cut and polished in Morocco, then finished by hand for a desk or an altar shelf.",
+    "facts": { "origin": "Morocco" }
+  },
+  {
+    "name": "a wider term covers a narrower mention",
+    "description": "Cut from quartz and polished to a soft sheen, this piece sits well on a shelf.",
+    "facts": { "stones": "rose quartz", "colours": "pink" }
+  },
+  {
+    "name": "count from the product name",
+    "description": "Seven stones, 7 in all, chosen for daily ritual and kept together in one pouch.",
+    "facts": { "name": "7 Chakra Tumbled Stone Set", "pieces": "7", "stones": "amethyst" }
+  }
+]

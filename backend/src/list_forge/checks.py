@@ -17,15 +17,26 @@ from list_forge.models import (
     ProductFacts,
     Severity,
 )
-from list_forge.vocabulary import Vocabulary, normalise
+from list_forge.vocabulary import Match, Vocabulary, normalise
 
 NUMBER_PATTERN = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 ABSENCE_PATTERN = re.compile(
-    r"\b(?:not\s+(?:specified|stated|listed|given|provided)|unspecified|unstated"
-    r"|no\s+(?:information|details)\s+(?:is|are)?\s*(?:available|given|provided))\b",
+    r"\b(?:"
+    r"not\s+(?:specified|stated|listed|given|provided|available|disclosed)"
+    r"|unspecified|unstated|undisclosed"
+    r"|no\s+(?:listed|stated|specified|known|recorded)\s+\w+"
+    r"|no\s+(?:information|details|data)\b"
+    r"|(?:does|do|did)\s+not\s+(?:specify|state|list|mention)"
+    r"|(?:isn't|aren't|wasn't|weren't)\s+(?:specified|stated|listed|given)"
+    r")",
     re.IGNORECASE,
 )
 THOUSANDS_SEPARATOR = ","
+COLOUR_CUE_WINDOW = 14
+COLOUR_CUE_BEFORE = re.compile(r"\b(?:in|of|a|an|the|its|their|with|and)\s+$", re.IGNORECASE)
+COLOUR_CUE_AFTER = re.compile(
+    r"^\s*(?:tone|tones|toned|hue|hues|finish|colou?r|colou?red|shade)\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -125,7 +136,15 @@ def check_entities(
         )
         for match in vocabulary.find_entities(text)
         if not _covered(match.term, allowed)
+        and not (vocabulary.is_ambiguous(match.term) and not _reads_as_colour(text, match))
     ]
+
+
+def _reads_as_colour(text: str, match: Match) -> bool:
+    """Words like 'clear' and 'gold' only count as a colour claim in colour-shaped phrasing."""
+    before = text[max(0, match.start - COLOUR_CUE_WINDOW) : match.start]
+    after = text[match.end : match.end + COLOUR_CUE_WINDOW]
+    return bool(COLOUR_CUE_BEFORE.search(before) or COLOUR_CUE_AFTER.match(after))
 
 
 def check_origin(
