@@ -112,6 +112,7 @@ class Pipeline:
                 identifier,
                 status=Status.FAILED,
                 error=str(error),
+                raw_output=error.raw_output if isinstance(error, GenerationError) else None,
             )
 
         findings = suite.run(facts, generation.output)
@@ -146,6 +147,7 @@ class Pipeline:
         attempts: int = 0,
         cache_hit: bool = False,
         error: str | None = None,
+        raw_output: str | None = None,
     ) -> Item:
         counted = usage or TokenUsage()
         params = self._generator.params
@@ -158,6 +160,7 @@ class Pipeline:
             output=output,
             findings=list(findings),
             error=error,
+            raw_output=raw_output,
             provenance=Provenance(
                 brand_id=brand.id,
                 prompt_version=PROMPT_VERSION,

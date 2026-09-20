@@ -36,6 +36,7 @@ Sleep = Callable[[float], Awaitable[None]]
 
 RETRYABLE_ERRORS = (APIConnectionError, RateLimitError, InternalServerError)
 TRUNCATED_FINISH_REASON = "length"
+RAW_OUTPUT_LIMIT = 4000
 
 
 class ProviderError(RuntimeError):
@@ -44,6 +45,10 @@ class ProviderError(RuntimeError):
 
 class GenerationError(RuntimeError):
     """The provider answered, but never with output that satisfied the schema."""
+
+    def __init__(self, message: str, raw_output: str | None = None) -> None:
+        super().__init__(message)
+        self.raw_output = raw_output
 
 
 class ModelUnavailableError(RuntimeError):
@@ -184,10 +189,12 @@ class GroqGenerator:
         messages = build_messages(build_system_prompt(brand), facts)
         usage = TokenUsage()
         last_detail = ""
+        last_text = ""
 
         for attempt in range(1, self._max_content_attempts + 1):
             completion = await self.complete(messages)
             usage = add_usage(usage, completion.usage)
+            last_text = completion.text
 
             try:
                 output = self._parse(completion)
@@ -208,7 +215,8 @@ class GroqGenerator:
             return Generation(output=output, usage=usage, attempts=attempt)
 
         raise GenerationError(
-            f"no valid output after {self._max_content_attempts} attempts: {last_detail}"
+            f"no valid output after {self._max_content_attempts} attempts: {last_detail}",
+            last_text[:RAW_OUTPUT_LIMIT] or None,
         )
 
     async def complete(self, messages: Sequence[Message]) -> Completion:

@@ -15,6 +15,7 @@ from fakes import (
     valid_copy_json,
 )
 from list_forge.llm import (
+    RAW_OUTPUT_LIMIT,
     GenerationError,
     GroqGenerator,
     ModelUnavailableError,
@@ -185,6 +186,34 @@ class TestContentRetries:
             await generator.generate(sample_facts(), sample_brand())
 
         assert len(client.completions.requests) == 2
+
+    async def test_it_carries_the_last_reply_for_the_reviewer(self) -> None:
+        generator, _, _ = make_generator(
+            [Reply("nope"), Reply("still nope")], max_content_attempts=2
+        )
+
+        with pytest.raises(GenerationError) as raised:
+            await generator.generate(sample_facts(), sample_brand())
+
+        assert raised.value.raw_output == "still nope"
+
+    async def test_a_long_reply_is_truncated_before_it_is_stored(self) -> None:
+        generator, _, _ = make_generator(
+            [Reply("x" * (RAW_OUTPUT_LIMIT + 50))], max_content_attempts=1
+        )
+
+        with pytest.raises(GenerationError) as raised:
+            await generator.generate(sample_facts(), sample_brand())
+
+        assert raised.value.raw_output == "x" * RAW_OUTPUT_LIMIT
+
+    async def test_an_empty_reply_is_stored_as_nothing(self) -> None:
+        generator, _, _ = make_generator([Reply("")], max_content_attempts=1)
+
+        with pytest.raises(GenerationError) as raised:
+            await generator.generate(sample_facts(), sample_brand())
+
+        assert raised.value.raw_output is None
 
 
 class TestRequestShape:

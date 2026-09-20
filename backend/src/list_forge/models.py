@@ -209,6 +209,7 @@ class Item(BaseModel):
     output: GeneratedCopy | None = None
     findings: list[Finding] = Field(default_factory=list)
     error: str | None = None
+    raw_output: str | None = None
     provenance: Provenance | None = None
 
 

@@ -49,6 +49,21 @@ class TestRouting:
         assert items[0].output is None
         assert "no valid output" in (items[0].error or "")
 
+    async def test_a_failed_item_keeps_the_last_raw_reply(self) -> None:
+        generator = FakeGenerator(default=GenerationError("no valid output", "{ not json"))
+
+        items = await pipeline(generator).run_batch([sample_facts()], sample_brand())
+
+        assert items[0].raw_output == "{ not json"
+
+    async def test_a_provider_failure_has_no_raw_reply(self) -> None:
+        generator = FakeGenerator(default=ProviderError("provider unavailable"))
+
+        items = await pipeline(generator).run_batch([sample_facts()], sample_brand())
+
+        assert items[0].status is Status.FAILED
+        assert items[0].raw_output is None
+
 
 class TestBatch:
     async def test_one_bad_row_does_not_sink_the_batch(self) -> None:
