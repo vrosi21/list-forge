@@ -74,3 +74,34 @@ class TestRollOver:
         clock.advance(hours=6)
 
         assert budget.spend("alice") is False
+
+
+class TestOwnLimits:
+    def test_a_label_limit_overrides_the_default(self) -> None:
+        budget = DailyBudget(1, clock=Clock())
+
+        assert budget.spend("dev", 3) is True
+        assert budget.spend("dev", 3) is True
+        assert budget.spend("dev", 3) is True
+        assert budget.spend("dev", 3) is False
+
+    def test_other_labels_keep_the_default(self) -> None:
+        budget = DailyBudget(1, clock=Clock())
+        budget.spend("dev", 3)
+
+        assert budget.spend("recruiter") is True
+        assert budget.spend("recruiter") is False
+
+    def test_a_label_limit_applies_when_there_is_no_default(self) -> None:
+        budget = DailyBudget(None, clock=Clock())
+
+        assert budget.spend("dev", 1) is True
+        assert budget.spend("dev", 1) is False
+
+    def test_the_remainder_uses_the_label_limit(self) -> None:
+        budget = DailyBudget(2, clock=Clock())
+        budget.spend("dev", 100)
+
+        assert budget.remaining("dev", 100) == 99
+        assert budget.limit_for(100) == 100
+        assert budget.limit_for(None) == 2

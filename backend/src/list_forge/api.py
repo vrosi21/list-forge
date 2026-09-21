@@ -99,16 +99,17 @@ def guard_spend(request: Request, services: ServicesDep) -> str:
     """Everything that protects the provider key, in the order that costs least to reject."""
     enforce_rate_limit(request, services)
 
-    label = services.access.label_for(request.headers.get(ACCESS_HEADER))
-    if label is None:
+    grant = services.access.grant_for(request.headers.get(ACCESS_HEADER))
+    if grant is None:
         raise HTTPException(UNAUTHORIZED, "this demo needs an access code")
 
-    if not services.daily_budget.spend(label):
+    budget = services.daily_budget
+    if not budget.spend(grant.label, grant.daily_runs):
         raise HTTPException(
             TOO_MANY_REQUESTS,
-            f"this access code has used its {services.daily_budget.limit} runs for today",
+            f"this access code has used its {budget.limit_for(grant.daily_runs)} runs for today",
         )
-    return label
+    return grant.label
 
 
 SpendDep = Annotated[str, Depends(guard_spend)]
@@ -154,13 +155,19 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/access", dependencies=[Depends(enforce_rate_limit)])
     def access(request: Request, services: ServicesDep) -> AccessStatus:
         """Whether a code would be accepted, without spending any of its runs."""
-        label = services.access.label_for(request.headers.get(ACCESS_HEADER))
+        grant = services.access.grant_for(request.headers.get(ACCESS_HEADER))
         budget = services.daily_budget
+        if grant is None:
+            return AccessStatus(
+                required=services.access.required,
+                valid=False,
+                max_rows=services.settings.demo_max_rows,
+            )
         return AccessStatus(
             required=services.access.required,
-            valid=label is not None,
-            runs_remaining=budget.remaining(label) if label is not None else None,
-            runs_per_day=budget.limit,
+            valid=True,
+            runs_remaining=budget.remaining(grant.label, grant.daily_runs),
+            runs_per_day=budget.limit_for(grant.daily_runs),
             max_rows=services.settings.demo_max_rows,
         )
 

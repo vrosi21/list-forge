@@ -191,7 +191,7 @@ def guarded_client(tmp_path: Path, generator: FakeGenerator) -> Iterator[TestCli
         _env_file=None,
         GROQ_API_KEY="test-key",
         database_path=tmp_path / "guarded.db",
-        demo_codes="a1:alice,b2:bob",
+        demo_codes="a1:alice,b2:bob,c3:dev:4",
         demo_max_rows=1,
         demo_daily_batches_per_code=2,
     )
@@ -316,3 +316,22 @@ def test_brands_describe_their_voice(client: TestClient) -> None:
 
     assert all(brand["voice"] for brand in brands)
     assert all("dont" in brand for brand in brands)
+
+
+class TestOwnLimits:
+    def test_a_code_with_its_own_limit_gets_more_runs(self, guarded_client: TestClient) -> None:
+        statuses = [guarded_upload(guarded_client, "c3").status_code for _ in range(5)]
+
+        assert statuses == [202, 202, 202, 202, 429]
+
+    def test_the_status_reports_the_code_limit(self, guarded_client: TestClient) -> None:
+        body = guarded_client.get("/access", headers={"x-demo-code": "c3"}).json()
+
+        assert body["runs_per_day"] == 4
+        assert body["runs_remaining"] == 4
+
+    def test_the_refusal_names_the_code_limit(self, guarded_client: TestClient) -> None:
+        for _ in range(4):
+            guarded_upload(guarded_client, "c3")
+
+        assert "its 4 runs" in guarded_upload(guarded_client, "c3").json()["detail"]
