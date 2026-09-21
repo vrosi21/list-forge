@@ -6,6 +6,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --no-editable
 
+COPY README.md ./
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
