@@ -3,11 +3,13 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from openai import APIStatusError, AuthenticationError
 
+from list_forge.access import AccessPolicy
+from list_forge.budgets import DailyBudget
 from list_forge.cache import CachedGenerator
 from list_forge.config import ConfigurationError, Settings
 from list_forge.llm import (
@@ -19,12 +21,14 @@ from list_forge.llm import (
     build_generator,
 )
 from list_forge.pipeline import Pipeline
+from list_forge.ratelimit import TokenBucket
 from list_forge.store import Store
 from list_forge.vocabulary import Vocabulary, load_vocabulary
 
 logger = logging.getLogger(__name__)
 
 NOT_PROBED = "provider was not probed"
+SECONDS_PER_MINUTE = 60.0
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,9 @@ class Services:
     generator: CachedGenerator
     pipeline: Pipeline
     provider: ProviderStatus
+    access: AccessPolicy = field(default_factory=AccessPolicy)
+    daily_budget: DailyBudget = field(default_factory=lambda: DailyBudget(None))
+    rate_limiter: TokenBucket | None = None
 
     def refreshing_pipeline(self) -> Pipeline:
         """Ignores stored answers, shares the semaphore so calls in flight stay capped."""
@@ -91,7 +98,18 @@ async def build_services(
             generator=cached,
             pipeline=Pipeline(cached, vocabulary, max_concurrency=settings.max_concurrency),
             provider=provider,
+            access=settings.access_policy(),
+            daily_budget=DailyBudget(settings.demo_daily_batches_per_code),
+            rate_limiter=build_rate_limiter(settings),
         )
+
+
+def build_rate_limiter(settings: Settings) -> TokenBucket | None:
+    """A minute's worth of requests as the burst, refilled steadily across that minute."""
+    allowance = settings.requests_per_minute_per_ip
+    if allowance is None:
+        return None
+    return TokenBucket(allowance, allowance / SECONDS_PER_MINUTE)
 
 
 async def probe_provider(generator: CopyGenerator, settings: Settings) -> ProviderStatus:

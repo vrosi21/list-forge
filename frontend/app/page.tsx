@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  ApiError,
+  UNAUTHORIZED,
   createBatch,
   listBrands,
   readBatch,
@@ -11,7 +13,9 @@ import {
   type Brand,
   type Health,
 } from "@/lib/api";
+import { readAccessCode, storeAccessCode } from "@/lib/access";
 import { itemsFor, progressOf, TAB_STATUSES, type TabStatus } from "@/lib/batch";
+import { AccessCodeForm } from "@/components/AccessCodeForm";
 import { CostCounter } from "@/components/CostCounter";
 import { ItemTable } from "@/components/ItemTable";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -33,6 +37,8 @@ export default function Home() {
   const [batch, setBatch] = useState<BatchResponse | null>(null);
   const [tab, setTab] = useState<TabStatus>(TAB_STATUSES[0]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const [needsCode, setNeedsCode] = useState(false);
   const [starting, setStarting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,33 +101,36 @@ export default function Home() {
     setStarting(true);
     setError(null);
     try {
-      const created = await createBatch(file, brandId);
+      const created = await createBatch(file, brandId, accessCode ?? readAccessCode());
       setBatch(null);
       setSelectedId(null);
       setBatchId(created);
+      setNeedsCode(false);
     } catch (cause) {
+      setNeedsCode(cause instanceof ApiError && cause.status === UNAUTHORIZED);
       setError(messageOf(cause));
     } finally {
       setStarting(false);
     }
-  }, []);
+  }, [accessCode]);
 
   const regenerate = useCallback(
     async (itemId: string) => {
       setRegenerating(true);
       setError(null);
       try {
-        await regenerateItem(itemId);
+        await regenerateItem(itemId, accessCode ?? readAccessCode());
         if (batchId !== null) {
           setBatch(await readBatch(batchId));
         }
       } catch (cause) {
+        setNeedsCode(cause instanceof ApiError && cause.status === UNAUTHORIZED);
         setError(messageOf(cause));
       } finally {
         setRegenerating(false);
       }
     },
-    [batchId],
+    [accessCode, batchId],
   );
 
   const selected = batch?.items.find((item) => item.id === selectedId) ?? null;
@@ -138,7 +147,22 @@ export default function Home() {
         <ProviderBadge health={health} />
       </header>
 
-      <UploadForm brands={brands} busy={starting} onStart={(file, brandId) => void start(file, brandId)} />
+      {needsCode ? (
+        <AccessCodeForm
+          onSubmit={(code) => {
+            storeAccessCode(code);
+            setAccessCode(code);
+            setNeedsCode(false);
+            setError(null);
+          }}
+        />
+      ) : null}
+
+      <UploadForm
+        brands={brands}
+        busy={starting}
+        onStart={(file, brandId) => void start(file, brandId)}
+      />
 
       {error !== null ? (
         <p role="alert" className="rounded border border-bad/40 bg-bad-soft px-4 py-3 text-sm text-bad">

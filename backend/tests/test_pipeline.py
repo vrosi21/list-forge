@@ -4,7 +4,7 @@ from fakes import VALID_COPY, FakeGenerator, auth_error, sample_brand, sample_fa
 from list_forge.llm import GenerationError, ProviderError
 from list_forge.models import GeneratedCopy, Status
 from list_forge.pipeline import Pipeline
-from list_forge.prompts import PROMPT_VERSION
+from list_forge.prompts import DEFAULT_PROMPT_VERSION
 from list_forge.vocabulary import build_vocabulary
 
 VOCABULARY = build_vocabulary(
@@ -135,7 +135,7 @@ class TestProvenance:
 
         provenance = items[0].provenance
         assert provenance is not None
-        assert provenance.prompt_version == PROMPT_VERSION
+        assert provenance.prompt_version == DEFAULT_PROMPT_VERSION
         assert len(provenance.prompt_fingerprint) == 12
         assert provenance.brand_id == "mindful-souls"
         assert provenance.params.model == "openai/gpt-oss-20b"

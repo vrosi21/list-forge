@@ -7,7 +7,7 @@ sampling parameter simply stops matching old entries. There is no invalidation s
 from list_forge.hashing import stable_hash
 from list_forge.llm import CopyGenerator
 from list_forge.models import BrandConfig, Generation, GenerationParams, ProductFacts
-from list_forge.prompts import PROMPT_VERSION, build_system_prompt, prompt_fingerprint
+from list_forge.prompts import PromptVersion
 from list_forge.store import Store
 
 
@@ -34,6 +34,10 @@ class CachedGenerator:
         return self._inner.params
 
     @property
+    def prompt(self) -> PromptVersion:
+        return self._inner.prompt
+
+    @property
     def inner(self) -> CopyGenerator:
         return self._inner
 
@@ -42,7 +46,7 @@ class CachedGenerator:
         return CachedGenerator(self._inner, self._store, refresh=True)
 
     async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation:
-        fingerprint = prompt_fingerprint(build_system_prompt(brand), self.params)
+        fingerprint = self.prompt.fingerprint(brand, self.params)
         key = cache_key(facts, brand.id, fingerprint)
 
         if not self._refresh:
@@ -55,7 +59,7 @@ class CachedGenerator:
             key,
             generation,
             model=self.params.model,
-            version=PROMPT_VERSION,
+            version=self.prompt.version,
             fingerprint=fingerprint,
         )
         return generation

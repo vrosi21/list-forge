@@ -14,6 +14,9 @@ export type Severity = components["schemas"]["Severity"];
 export type Status = components["schemas"]["Status"];
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const ACCESS_HEADER = "X-Demo-Code";
+
+export const UNAUTHORIZED = 401;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -29,11 +32,19 @@ export async function listBrands(signal?: AbortSignal): Promise<Brand[]> {
   return request<Brand[]>("/brands", { signal });
 }
 
-export async function createBatch(file: File, brandId: string): Promise<string> {
+export async function createBatch(
+  file: File,
+  brandId: string,
+  accessCode: string | null,
+): Promise<string> {
   const body = new FormData();
   body.append("file", file);
   body.append("brand_id", brandId);
-  const created = await request<{ batch_id: string }>("/batches", { method: "POST", body });
+  const created = await request<{ batch_id: string }>("/batches", {
+    method: "POST",
+    body,
+    headers: accessHeaders(accessCode),
+  });
   return created.batch_id;
 }
 
@@ -41,8 +52,15 @@ export async function readBatch(batchId: string, signal?: AbortSignal): Promise<
   return request<BatchResponse>(`/batches/${encodeURIComponent(batchId)}`, { signal });
 }
 
-export async function regenerateItem(itemId: string): Promise<Item> {
-  return request<Item>(`/items/${encodeURIComponent(itemId)}/regenerate`, { method: "POST" });
+export async function regenerateItem(itemId: string, accessCode: string | null): Promise<Item> {
+  return request<Item>(`/items/${encodeURIComponent(itemId)}/regenerate`, {
+    method: "POST",
+    headers: accessHeaders(accessCode),
+  });
+}
+
+function accessHeaders(accessCode: string | null): HeadersInit | undefined {
+  return accessCode ? { [ACCESS_HEADER]: accessCode } : undefined;
 }
 
 export async function readHealth(signal?: AbortSignal): Promise<Health> {

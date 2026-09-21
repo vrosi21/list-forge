@@ -3,10 +3,12 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from list_forge.access import AccessPolicy
 from list_forge.models import GenerationParams, ReasoningEffort
+from list_forge.prompts import DEFAULT_PROMPT_VERSION, PROMPT_VERSIONS
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
@@ -40,11 +42,27 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(default=1_000_000, gt=0)
 
+    prompt_version: str = DEFAULT_PROMPT_VERSION
+
+    demo_codes: SecretStr | None = None
+    demo_max_rows: int | None = Field(default=None, gt=0)
+    demo_daily_batches_per_code: int | None = Field(default=None, gt=0)
+    requests_per_minute_per_ip: int | None = Field(default=None, gt=0)
+    trust_proxy_headers: bool = False
+
     brands_dir: Path = BACKEND_DIR / "brands"
     data_dir: Path = REPO_ROOT / "data"
     output_dir: Path = BACKEND_DIR / "out"
     database_path: Path = BACKEND_DIR / "listforge.db"
     frontend_origin: str = "http://localhost:3000"
+
+    @field_validator("prompt_version")
+    @classmethod
+    def _known_prompt_version(cls, value: str) -> str:
+        if value not in PROMPT_VERSIONS:
+            known = ", ".join(sorted(PROMPT_VERSIONS))
+            raise ValueError(f"unknown prompt version {value!r}; known: {known}")
+        return value
 
     @property
     def vocabulary_path(self) -> Path:
@@ -55,6 +73,11 @@ class Settings(BaseSettings):
         if self.llm_api_key is None:
             raise ConfigurationError("GROQ_API_KEY is not set")
         return self.llm_api_key
+
+    def access_policy(self) -> AccessPolicy:
+        """Parsed once at startup, so a malformed code list fails before any request."""
+        raw = self.demo_codes.get_secret_value() if self.demo_codes else None
+        return AccessPolicy.from_raw(raw)
 
     def generation_params(self) -> GenerationParams:
         return GenerationParams(

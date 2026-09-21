@@ -4,7 +4,6 @@ import pytest
 
 from fakes import FakeGenerator, sample_brand, sample_facts
 from list_forge.cache import CachedGenerator, cache_key
-from list_forge.prompts import build_system_prompt, prompt_fingerprint
 from list_forge.store import Store
 
 
@@ -16,8 +15,8 @@ def store(tmp_path: Path) -> Store:
 
 
 def fingerprint_for(brand_id: str = "mindful-souls") -> str:
-    brand = sample_brand(id=brand_id)
-    return prompt_fingerprint(build_system_prompt(brand), FakeGenerator().params)
+    generator = FakeGenerator()
+    return generator.prompt.fingerprint(sample_brand(id=brand_id), generator.params)
 
 
 class TestKey:

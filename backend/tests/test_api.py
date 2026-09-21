@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from conftest import csv_text
 from fakes import FakeGenerator
 from list_forge.api import create_app
+from list_forge.budgets import DailyBudget
 from list_forge.cache import CachedGenerator
 from list_forge.config import Settings
 from list_forge.pipeline import Pipeline
@@ -182,3 +183,87 @@ class TestRegenerate:
 
     def test_an_unknown_item_is_missing(self, client: TestClient) -> None:
         assert client.post("/items/nope/regenerate").status_code == 404
+
+
+@pytest.fixture
+def guarded_client(tmp_path: Path, generator: FakeGenerator) -> Iterator[TestClient]:
+    settings = Settings(
+        _env_file=None,
+        GROQ_API_KEY="test-key",
+        database_path=tmp_path / "guarded.db",
+        demo_codes="a1:alice,b2:bob",
+        demo_max_rows=1,
+        demo_daily_batches_per_code=2,
+    )
+    store = Store(settings.database_path)
+    vocabulary = load_vocabulary(settings.vocabulary_path)
+    cached = CachedGenerator(generator, store)
+    services = Services(
+        settings=settings,
+        store=store,
+        vocabulary=vocabulary,
+        generator=cached,
+        pipeline=Pipeline(cached, vocabulary, max_concurrency=2),
+        provider=ProviderStatus(True, settings.llm_model, datetime.now(tz=UTC), "not probed"),
+        access=settings.access_policy(),
+        daily_budget=DailyBudget(settings.demo_daily_batches_per_code),
+        rate_limiter=None,
+    )
+    with TestClient(create_app(services)) as started:
+        yield started
+    store.close()
+
+
+def guarded_upload(client: TestClient, code: str | None, rows: str = AMETHYST):
+    headers = {"x-demo-code": code} if code is not None else {}
+    return client.post(
+        "/batches",
+        files={"file": ("products.csv", csv_text(rows).encode("utf-8"), "text/csv")},
+        data={"brand_id": "mindful-souls"},
+        headers=headers,
+    )
+
+
+class TestAccessCodes:
+    def test_a_known_code_is_accepted(self, guarded_client: TestClient) -> None:
+        assert guarded_upload(guarded_client, "a1").status_code == 202
+
+    def test_a_missing_code_is_refused(self, guarded_client: TestClient) -> None:
+        response = guarded_upload(guarded_client, None)
+
+        assert response.status_code == 401
+        assert "access code" in response.json()["detail"]
+
+    def test_an_unknown_code_is_refused(self, guarded_client: TestClient) -> None:
+        assert guarded_upload(guarded_client, "nope").status_code == 401
+
+    def test_reading_a_batch_needs_no_code(self, guarded_client: TestClient) -> None:
+        batch_id = guarded_upload(guarded_client, "a1").json()["batch_id"]
+
+        assert guarded_client.get(f"/batches/{batch_id}").status_code == 200
+
+    def test_listing_brands_needs_no_code(self, guarded_client: TestClient) -> None:
+        assert guarded_client.get("/brands").status_code == 200
+
+
+class TestDemoLimits:
+    def test_a_file_over_the_row_cap_is_refused(self, guarded_client: TestClient) -> None:
+        response = guarded_upload(guarded_client, "a1", f"{AMETHYST}\n{ROSE_QUARTZ}")
+
+        assert response.status_code == 413
+        assert "at most 1 rows" in response.json()["detail"]
+
+    def test_the_daily_allowance_runs_out(self, guarded_client: TestClient) -> None:
+        for _ in range(2):
+            assert guarded_upload(guarded_client, "a1").status_code == 202
+
+        response = guarded_upload(guarded_client, "a1")
+
+        assert response.status_code == 429
+        assert "runs for today" in response.json()["detail"]
+
+    def test_each_code_has_its_own_allowance(self, guarded_client: TestClient) -> None:
+        for _ in range(2):
+            guarded_upload(guarded_client, "a1")
+
+        assert guarded_upload(guarded_client, "b2").status_code == 202

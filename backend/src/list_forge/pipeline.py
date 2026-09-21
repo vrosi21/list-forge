@@ -21,7 +21,6 @@ from list_forge.models import (
     TokenUsage,
 )
 from list_forge.pricing import estimate_cost_usd
-from list_forge.prompts import PROMPT_VERSION, build_system_prompt, prompt_fingerprint
 from list_forge.routing import route
 from list_forge.vocabulary import Vocabulary
 
@@ -93,7 +92,7 @@ class Pipeline:
     ) -> Item:
         suite = checks or build_check_suite(brand, self._vocabulary)
         identifier = item_id or uuid4().hex
-        fingerprint = prompt_fingerprint(build_system_prompt(brand), self._generator.params)
+        fingerprint = self._generator.prompt.fingerprint(brand, self._generator.params)
 
         try:
             async with self._semaphore:
@@ -163,7 +162,7 @@ class Pipeline:
             raw_output=raw_output,
             provenance=Provenance(
                 brand_id=brand.id,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=self._generator.prompt.version,
                 prompt_fingerprint=fingerprint,
                 params=params,
                 usage=counted,

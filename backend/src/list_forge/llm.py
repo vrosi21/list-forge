@@ -27,7 +27,7 @@ from list_forge.models import (
     ProductFacts,
     TokenUsage,
 )
-from list_forge.prompts import build_messages, build_system_prompt, repair_message
+from list_forge.prompts import PromptVersion, build_messages, get_prompt_version, repair_message
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,9 @@ class CopyGenerator(Protocol):
 
     @property
     def params(self) -> GenerationParams: ...
+
+    @property
+    def prompt(self) -> PromptVersion: ...
 
     async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation: ...
 
@@ -152,6 +155,7 @@ class GroqGenerator:
         self,
         client: AsyncOpenAI,
         params: GenerationParams,
+        prompt: PromptVersion,
         *,
         max_transport_attempts: int,
         max_content_attempts: int,
@@ -161,6 +165,7 @@ class GroqGenerator:
     ) -> None:
         self._client = client
         self._params = params
+        self._prompt = prompt
         self._max_transport_attempts = max_transport_attempts
         self._max_content_attempts = max_content_attempts
         self._backoff_base_s = backoff_base_s
@@ -170,6 +175,10 @@ class GroqGenerator:
     @property
     def params(self) -> GenerationParams:
         return self._params
+
+    @property
+    def prompt(self) -> PromptVersion:
+        return self._prompt
 
     async def available_models(self) -> list[str]:
         """Every model this key may call. Costs no tokens."""
@@ -186,7 +195,7 @@ class GroqGenerator:
         return self._params.model
 
     async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation:
-        messages = build_messages(build_system_prompt(brand), facts)
+        messages = build_messages(self._prompt.system_prompt(brand), facts)
         usage = TokenUsage()
         last_detail = ""
         last_text = ""
@@ -273,6 +282,7 @@ def build_generator(settings: Settings, client: AsyncOpenAI) -> GroqGenerator:
     return GroqGenerator(
         client,
         settings.generation_params(),
+        get_prompt_version(settings.prompt_version),
         max_transport_attempts=settings.max_transport_attempts,
         max_content_attempts=settings.max_content_attempts,
         backoff_base_s=settings.backoff_base_s,

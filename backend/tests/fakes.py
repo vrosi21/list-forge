@@ -19,6 +19,7 @@ from list_forge.models import (
     ProductFacts,
     TokenUsage,
 )
+from list_forge.prompts import DEFAULT_PROMPT_VERSION, PromptVersion, get_prompt_version
 
 REQUEST = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
 
@@ -59,6 +60,10 @@ def sample_brand(**overrides: Any) -> BrandConfig:
         "claims": {"banned": [r"\bheals?\b", r"\bhealing\b"]},
     }
     return BrandConfig.model_validate(base | overrides)
+
+
+def sample_prompt(version: str = DEFAULT_PROMPT_VERSION) -> PromptVersion:
+    return get_prompt_version(version)
 
 
 def sample_params(**overrides: Any) -> GenerationParams:
@@ -108,7 +113,9 @@ class FakeGenerator:
         replies: dict[str, GeneratedCopy | Exception] | None = None,
         default: GeneratedCopy | Exception | None = None,
         delay_s: float = 0.0,
+        prompt: PromptVersion | None = None,
     ) -> None:
+        self._prompt = prompt or sample_prompt()
         self._replies = replies or {}
         self._default = default or GeneratedCopy.model_validate(VALID_COPY)
         self._delay_s = delay_s
@@ -119,6 +126,10 @@ class FakeGenerator:
     @property
     def params(self) -> GenerationParams:
         return sample_params()
+
+    @property
+    def prompt(self) -> PromptVersion:
+        return self._prompt
 
     async def generate(self, facts: ProductFacts, brand: BrandConfig) -> Generation:
         self.in_flight += 1
@@ -199,7 +210,9 @@ def make_generator(
         "backoff_base_s": 1.0,
         "backoff_cap_s": 8.0,
     }
-    generator = GroqGenerator(client, sample_params(), sleep=sleep, **(settings | overrides))
+    generator = GroqGenerator(
+        client, sample_params(), sample_prompt(), sleep=sleep, **(settings | overrides)
+    )
     return generator, client, sleep
 
 

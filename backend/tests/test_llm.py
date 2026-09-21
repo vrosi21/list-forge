@@ -11,6 +11,7 @@ from fakes import (
     sample_brand,
     sample_facts,
     sample_params,
+    sample_prompt,
     server_error,
     valid_copy_json,
 )
@@ -233,6 +234,7 @@ class TestRequestShape:
         generator = GroqGenerator(
             client,
             sample_params(reasoning_effort=None),
+            sample_prompt(),
             max_transport_attempts=1,
             max_content_attempts=1,
             backoff_base_s=1.0,
@@ -250,6 +252,7 @@ class TestProbe:
         return GroqGenerator(
             client,
             sample_params(),
+            sample_prompt(),
             max_transport_attempts=1,
             max_content_attempts=1,
             backoff_base_s=1.0,

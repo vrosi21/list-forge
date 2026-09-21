@@ -24,6 +24,7 @@ from list_forge.llm import (
 from list_forge.models import BrandConfig, Item, Status, TokenUsage
 from list_forge.pipeline import Pipeline
 from list_forge.pricing import estimate_cost_usd
+from list_forge.prompts import PROMPT_VERSIONS
 from list_forge.services import build_services
 from list_forge.vocabulary import VocabularyError
 
@@ -49,8 +50,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "check":
         return asyncio.run(_run_check(settings))
     if args.command == "run":
-        return asyncio.run(_run_batch(settings, args.csv_path, args.brand, args.limit))
+        return asyncio.run(
+            _run_batch(
+                _with_prompt(settings, args.prompt_version), args.csv_path, args.brand, args.limit
+            )
+        )
+    if args.command == "compare":
+        return asyncio.run(
+            _run_comparison(settings, args.csv_path, args.brand, args.versions, args.limit)
+        )
     return _run_inspect(settings, args.csv_path, args.brand, args.limit)
+
+
+def _with_prompt(settings: Settings, version: str | None) -> Settings:
+    return settings if version is None else settings.model_copy(update={"prompt_version": version})
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -65,6 +78,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="generate, check and route a product CSV")
     _add_catalog_arguments(run)
+    run.add_argument("--prompt-version", choices=sorted(PROMPT_VERSIONS), default=None)
+
+    compare = commands.add_parser(
+        "compare", help="run the same catalogue under two prompt versions"
+    )
+    _add_catalog_arguments(compare)
+    compare.add_argument(
+        "--versions",
+        default=",".join(sorted(PROMPT_VERSIONS)),
+        help="comma separated prompt versions to compare",
+    )
     return parser
 
 
@@ -153,6 +177,77 @@ async def _run_batch(settings: Settings, csv_path: Path, brand_id: str, limit: i
     _print_summary(settings, items)
     _write_results(settings, items)
     return EXIT_REJECTED if any(item.status is not Status.APPROVED for item in items) else EXIT_OK
+
+
+async def _run_comparison(
+    settings: Settings, csv_path: Path, brand_id: str, versions: str, limit: int | None
+) -> int:
+    """The same rows under each prompt version, so routing outcomes can be compared."""
+    loaded = _load(settings, csv_path, brand_id, limit)
+    if loaded is None:
+        return EXIT_UNUSABLE
+    brand, catalog = loaded
+
+    requested = [version.strip() for version in versions.split(",") if version.strip()]
+    unknown = [version for version in requested if version not in PROMPT_VERSIONS]
+    if unknown:
+        print(f"error: unknown prompt version(s): {', '.join(unknown)}", file=sys.stderr)
+        return EXIT_UNUSABLE
+
+    results: dict[str, list[Item]] = {}
+    for version in requested:
+        try:
+            async with build_services(_with_prompt(settings, version)) as services:
+                results[version] = await services.pipeline.run_batch(
+                    catalog.products, brand, on_item=services.store.save_item
+                )
+        except ConfigurationError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return EXIT_UNUSABLE
+
+    _print_comparison(settings, results)
+    return EXIT_OK
+
+
+def _print_comparison(settings: Settings, results: dict[str, Sequence[Item]]) -> None:
+    print(
+        f"{'version':<10} {'approved':>9} {'review':>7} {'failed':>7} {'findings':>9} {'cost':>10}"
+    )
+    for version, items in results.items():
+        counts = Counter(item.status.value for item in items)
+        findings = sum(len(item.findings) for item in items)
+        usage = TokenUsage()
+        for item in items:
+            if item.provenance:
+                usage = _accumulate(usage, item.provenance.usage)
+        cost = estimate_cost_usd(settings.llm_model, usage)
+        rendered = "-" if cost is None else f"${cost:.6f}"
+        print(
+            f"{version:<10} {counts[Status.APPROVED.value]:>9} "
+            f"{counts[Status.NEEDS_REVIEW.value]:>7} {counts[Status.FAILED.value]:>7} "
+            f"{findings:>9} {rendered:>10}"
+        )
+
+    print()
+    checks = sorted(
+        {
+            finding.check.value
+            for items in results.values()
+            for item in items
+            for finding in item.findings
+        }
+    )
+    if not checks:
+        return
+
+    print(f"{'check':<10}" + "".join(f"{version:>10}" for version in results))
+    for check in checks:
+        row = "".join(f"{_count_check(items, check):>10}" for items in results.values())
+        print(f"{check:<10}{row}")
+
+
+def _count_check(items: Sequence[Item], check: str) -> int:
+    return sum(1 for item in items for finding in item.findings if finding.check.value == check)
 
 
 def _run_inspect(settings: Settings, csv_path: Path, brand_id: str, limit: int | None) -> int:
