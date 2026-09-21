@@ -1,5 +1,6 @@
 import type { components } from "@/lib/api-types";
 
+export type AccessStatus = components["schemas"]["AccessStatus"];
 export type Brand = components["schemas"]["BrandSummary"];
 export type Batch = components["schemas"]["Batch"];
 export type BatchResponse = components["schemas"]["BatchResponse"];
@@ -61,6 +62,13 @@ export async function regenerateItem(itemId: string, accessCode: string | null):
 
 function accessHeaders(accessCode: string | null): HeadersInit | undefined {
   return accessCode ? { [ACCESS_HEADER]: accessCode } : undefined;
+}
+
+export async function checkAccess(
+  accessCode: string | null,
+  signal?: AbortSignal,
+): Promise<AccessStatus> {
+  return request<AccessStatus>("/access", { headers: accessHeaders(accessCode), signal });
 }
 
 export async function readHealth(signal?: AbortSignal): Promise<Health> {

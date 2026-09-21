@@ -1,201 +1,225 @@
-"use client";
+import Link from "next/link";
+import { CodeGate } from "@/components/CodeGate";
+import type { Brand } from "@/lib/api";
+import { REPOSITORY_URL } from "@/lib/site";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  ApiError,
-  UNAUTHORIZED,
-  createBatch,
-  listBrands,
-  readBatch,
-  readHealth,
-  regenerateItem,
-  type BatchResponse,
-  type Brand,
-  type Health,
-} from "@/lib/api";
-import { readAccessCode, storeAccessCode } from "@/lib/access";
-import { itemsFor, progressOf, TAB_STATUSES, type TabStatus } from "@/lib/batch";
-import { AccessCodeForm } from "@/components/AccessCodeForm";
-import { CostCounter } from "@/components/CostCounter";
-import { ItemTable } from "@/components/ItemTable";
-import { ProgressBar } from "@/components/ProgressBar";
-import { ProviderBadge } from "@/components/ProviderBadge";
-import { ReviewPanel } from "@/components/ReviewPanel";
-import { StatusTabs } from "@/components/StatusTabs";
-import { UploadForm } from "@/components/UploadForm";
+export const revalidate = 3600;
 
-const POLL_INTERVAL_MS = 1000;
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "the request failed";
+const STEPS = [
+  {
+    title: "Products in",
+    body: "Upload a CSV, or edit the example table in the tool. One row per product. An empty cell means the fact is unknown.",
+  },
+  {
+    title: "Brand chosen",
+    body: "The brand sets the voice and a list of claims that are never allowed. The same product reads differently under each brand.",
+  },
+  {
+    title: "Model drafts",
+    body: "One request per product returns a title, a short and a long description, bullet points and SEO fields. A reply in the wrong format is sent back with the errors.",
+  },
+  {
+    title: "Code decides",
+    body: "Plain rules compare the draft with the product row. The model never grades its own work.",
+  },
+] as const;
+
+const OUTCOMES = [
+  {
+    label: "Approved",
+    tone: "bg-ok-soft text-ok",
+    body: "No findings. It still waits for a person to publish it.",
+  },
+  {
+    label: "Needs review",
+    tone: "bg-warn-soft text-warn",
+    body: "At least one finding, marked in the text with the rule that caught it.",
+  },
+  {
+    label: "Failed",
+    tone: "bg-bad-soft text-bad",
+    body: "No usable draft after retries. The last reply is kept so you can see why.",
+  },
+] as const;
+
+const CHECKS = [
+  {
+    title: "Numbers",
+    body: "A count, size, weight or price that is not in the row. 24.90 and 24.9 are treated as the same number.",
+  },
+  {
+    title: "Stones, colours, materials",
+    body: "Any known term the row does not list, including plurals and spelling variants such as tigers eye.",
+  },
+  {
+    title: "Origin",
+    body: "A country or region, or its adjective, that the row does not give.",
+  },
+  {
+    title: "Banned claims",
+    body: "Wording the brand forbids, such as heals, cures or relieves anxiety.",
+  },
+  {
+    title: "Missing data",
+    body: "Sentences about facts that are absent, such as origin not specified. The model should leave those out.",
+  },
+] as const;
+
+async function loadBrands(): Promise<Brand[]> {
+  try {
+    const response = await fetch(`${API_URL}/brands`, { next: { revalidate } });
+    return response.ok ? ((await response.json()) as Brand[]) : [];
+  } catch {
+    return [];
+  }
 }
 
-export default function Home() {
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [health, setHealth] = useState<Health | null>(null);
-  const [batchId, setBatchId] = useState<string | null>(null);
-  const [batch, setBatch] = useState<BatchResponse | null>(null);
-  const [tab, setTab] = useState<TabStatus>(TAB_STATUSES[0]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [accessCode, setAccessCode] = useState<string | null>(null);
-  const [needsCode, setNeedsCode] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    void (async () => {
-      try {
-        const [loadedBrands, loadedHealth] = await Promise.all([
-          listBrands(controller.signal),
-          readHealth(controller.signal),
-        ]);
-        setBrands(loadedBrands);
-        setHealth(loadedHealth);
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          setError(messageOf(cause));
-        }
-      }
-    })();
-
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    if (batchId === null) {
-      return;
-    }
-
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const poll = async () => {
-      try {
-        const next = await readBatch(batchId, controller.signal);
-        if (controller.signal.aborted) {
-          return;
-        }
-        setBatch(next);
-        if (progressOf(next.counts).running) {
-          timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          setError(messageOf(cause));
-        }
-      }
-    };
-
-    void poll();
-
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [batchId]);
-
-  const start = useCallback(async (file: File, brandId: string) => {
-    setStarting(true);
-    setError(null);
-    try {
-      const created = await createBatch(file, brandId, accessCode ?? readAccessCode());
-      setBatch(null);
-      setSelectedId(null);
-      setBatchId(created);
-      setNeedsCode(false);
-    } catch (cause) {
-      setNeedsCode(cause instanceof ApiError && cause.status === UNAUTHORIZED);
-      setError(messageOf(cause));
-    } finally {
-      setStarting(false);
-    }
-  }, [accessCode]);
-
-  const regenerate = useCallback(
-    async (itemId: string) => {
-      setRegenerating(true);
-      setError(null);
-      try {
-        await regenerateItem(itemId, accessCode ?? readAccessCode());
-        if (batchId !== null) {
-          setBatch(await readBatch(batchId));
-        }
-      } catch (cause) {
-        setNeedsCode(cause instanceof ApiError && cause.status === UNAUTHORIZED);
-        setError(messageOf(cause));
-      } finally {
-        setRegenerating(false);
-      }
-    },
-    [accessCode, batchId],
+function SectionHeading({ id, title, lede }: { id: string; title: string; lede: string }) {
+  return (
+    <div id={id} className="flex scroll-mt-8 flex-col gap-2">
+      <h2 className="text-xl font-semibold tracking-tight text-ink">{title}</h2>
+      <p className="max-w-2xl text-ink-soft">{lede}</p>
+    </div>
   );
+}
 
-  const selected = batch?.items.find((item) => item.id === selectedId) ?? null;
+export default async function Home() {
+  const brands = await loadBrands();
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">ListForge</h1>
-          <p className="text-sm text-muted">
-            The model proposes copy. Checks against the catalogue decide where it goes.
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-24 px-6 py-16">
+      <section className="grid items-start gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-5">
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight text-ink md:text-5xl">
+            Product copy that has to match the catalogue.
+          </h1>
+          <p className="max-w-xl text-lg text-ink-soft">
+            ListForge writes shop listings with a language model, then checks every number,
+            stone, colour, material and place against the product&apos;s own data. Anything it
+            cannot back up goes to a person, marked where it appears.
+          </p>
+          <p className="max-w-xl text-ink-soft">Nothing is published on its own.</p>
+        </div>
+        <CodeGate />
+      </section>
+
+      <section className="flex flex-col gap-8">
+        <SectionHeading
+          id="how"
+          title="How it works"
+          lede="Each product goes through the same four steps. The model proposes the text; code decides where it goes."
+        />
+        <ol className="grid gap-px overflow-hidden rounded border border-rule bg-rule md:grid-cols-4">
+          {STEPS.map((step, index) => (
+            <li key={step.title} className="flex flex-col gap-2 bg-surface p-5">
+              <span className="font-mono text-xs text-muted">0{index + 1}</span>
+              <h3 className="font-medium text-ink">{step.title}</h3>
+              <p className="text-sm text-ink-soft">{step.body}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="grid gap-4 md:grid-cols-3">
+          {OUTCOMES.map((outcome) => (
+            <div key={outcome.label} className="flex flex-col gap-2">
+              <span
+                className={`self-start rounded px-2 py-0.5 text-xs font-medium ${outcome.tone}`}
+              >
+                {outcome.label}
+              </span>
+              <p className="text-sm text-ink-soft">{outcome.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-8">
+        <SectionHeading
+          id="checks"
+          title="What gets flagged"
+          lede="The checks look for things that appear in the draft but not in the row. Language models tend to add plausible details nobody supplied, so that is where they look."
+        />
+        <dl className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+          {CHECKS.map((check) => (
+            <div key={check.title} className="flex flex-col gap-1 border-t border-rule pt-4">
+              <dt className="font-medium text-ink">{check.title}</dt>
+              <dd className="text-sm text-ink-soft">{check.body}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="flex flex-col gap-8">
+        <SectionHeading
+          id="brands"
+          title="Brands"
+          lede="A brand is a short configuration file. It says who the copy is for, how it should sound and what it must never say. The checks are the same for every brand. Only the prompt and the banned words change."
+        />
+        {brands.length === 0 ? (
+          <p className="text-sm text-muted">Brand details load from the server, which is not answering right now.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {brands.map((brand) => (
+              <article key={brand.id} className="flex flex-col gap-4 rounded border border-rule bg-surface p-5">
+                <h3 className="font-medium text-ink">{brand.name}</h3>
+                <dl className="flex flex-col gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted">Writes for</dt>
+                    <dd className="text-ink-soft">{brand.audience ?? "Not stated"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Voice</dt>
+                    <dd className="text-ink-soft">{brand.voice}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Never</dt>
+                    <dd>
+                      <ul className="flex flex-col gap-1 text-ink-soft">
+                        {brand.dont?.map((rule) => <li key={rule}>{rule}</li>)}
+                      </ul>
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
+        <p className="max-w-2xl text-xs text-muted">
+          These voices were inferred from public storefronts. They are not official guidelines,
+          and the brands have no involvement with this project.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-4 border-t border-rule pt-10">
+        <h2 className="text-xl font-semibold tracking-tight text-ink">About this demo</h2>
+        <div className="flex max-w-2xl flex-col gap-3 text-ink-soft">
+          <p>
+            ListForge is a portfolio project. Access is by invitation because each run calls a
+            paid model. Each code has a small number of runs per day, and files are limited to a
+            few rows.
+          </p>
+          <p>
+            Product rows you upload are stored on the server so results can be shown and reused.
+            Please do not upload personal or confidential data. The{" "}
+            <Link href="/privacy" className="text-ink underline">
+              privacy notice
+            </Link>{" "}
+            and{" "}
+            <Link href="/terms" className="text-ink underline">
+              terms
+            </Link>{" "}
+            explain the rest.
+          </p>
+          <p>
+            The source code is public on{" "}
+            <a href={REPOSITORY_URL} className="text-ink underline">
+              GitHub
+            </a>
+            .
           </p>
         </div>
-        <ProviderBadge health={health} />
-      </header>
-
-      {needsCode ? (
-        <AccessCodeForm
-          onSubmit={(code) => {
-            storeAccessCode(code);
-            setAccessCode(code);
-            setNeedsCode(false);
-            setError(null);
-          }}
-        />
-      ) : null}
-
-      <UploadForm
-        brands={brands}
-        busy={starting}
-        onStart={(file, brandId) => void start(file, brandId)}
-      />
-
-      {error !== null ? (
-        <p role="alert" className="rounded border border-bad/40 bg-bad-soft px-4 py-3 text-sm text-bad">
-          {error}
-        </p>
-      ) : null}
-
-      {batch !== null ? (
-        <div className="flex flex-col gap-6">
-          <div className="rounded-lg border border-rule bg-surface p-4">
-            <ProgressBar progress={progressOf(batch.counts)} />
-          </div>
-
-          <CostCounter totals={batch.totals} />
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <div className="overflow-hidden rounded-lg border border-rule bg-surface">
-              <StatusTabs counts={batch.counts} active={tab} onSelect={setTab} />
-              <ItemTable
-                items={itemsFor(batch.items, tab)}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            </div>
-
-            <ReviewPanel
-              item={selected}
-              regenerating={regenerating}
-              onRegenerate={(itemId) => void regenerate(itemId)}
-            />
-          </div>
-        </div>
-      ) : null}
+      </section>
     </main>
   );
 }

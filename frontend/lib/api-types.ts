@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Access
+         * @description Whether a code would be accepted, without spending any of its runs.
+         */
+        get: operations["access_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/batches": {
         parameters: {
             query?: never;
@@ -93,6 +113,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessStatus */
+        AccessStatus: {
+            /** Required */
+            required: boolean;
+            /** Valid */
+            valid: boolean;
+            /** Runs Remaining */
+            runs_remaining?: number | null;
+            /** Runs Per Day */
+            runs_per_day?: number | null;
+            /** Max Rows */
+            max_rows?: number | null;
+        };
         /** Batch */
         Batch: {
             /** Id */
@@ -157,12 +190,28 @@ export interface components {
             /** Brand Id */
             brand_id: string;
         };
-        /** BrandSummary */
+        /**
+         * BrandSummary
+         * @description What a visitor needs to choose a brand: who it writes for and the rules it follows.
+         */
         BrandSummary: {
             /** Id */
             id: string;
             /** Name */
             name: string;
+            /** Audience */
+            audience?: string | null;
+            /**
+             * Voice
+             * @default
+             */
+            voice: string;
+            /** Do */
+            do?: string[];
+            /** Dont */
+            dont?: string[];
+            /** Source */
+            source?: string | null;
         };
         /**
          * CheckName
@@ -402,6 +451,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrandSummary"][];
+                };
+            };
+        };
+    };
+    access_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessStatus"];
                 };
             };
         };

@@ -47,7 +47,7 @@ def list_brands(brands_dir: Path) -> list[BrandSummary]:
         except BrandConfigError:
             logger.warning("skipping unreadable brand file: %s", path.name)
             continue
-        summaries.append(BrandSummary(id=brand.id, name=brand.name))
+        summaries.append(BrandSummary.from_config(brand))
     return sorted(summaries, key=lambda summary: summary.name)
 
 

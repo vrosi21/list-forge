@@ -41,7 +41,7 @@ export function ReviewPanel({ item, regenerating, onRegenerate }: ReviewPanelPro
           disabled={regenerating}
           className="rounded border border-accent px-3 py-1.5 text-sm font-semibold text-accent disabled:opacity-40"
         >
-          {regenerating ? "Regenerating…" : "Regenerate"}
+          {regenerating ? "Regenerating" : "Regenerate"}
         </button>
       </header>
 

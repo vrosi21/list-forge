@@ -1,43 +1,69 @@
 @import "tailwindcss";
 
-:root {
-  --page: #f3f5f8;
-  --surface: #ffffff;
-  --sunken: #edf0f5;
-  --ink: #131a27;
-  --ink-soft: #353e51;
-  --muted: #5a6376;
-  --rule: #d5dbe4;
-  --accent: #2a47a1;
-  --accent-soft: #e1e7f6;
-  --ok: #1f6e48;
-  --ok-soft: #dfefe5;
-  --warn: #8c590c;
-  --warn-soft: #f5ead4;
-  --bad: #aa2633;
-  --bad-soft: #f6dfe1;
+:root,
+:root[data-theme="light"] {
+  --page: #f5f4f0;
+  --surface: #fbfaf7;
+  --sunken: #eceae4;
+  --ink: #1d1c1a;
+  --ink-soft: #494741;
+  --muted: #76736b;
+  --rule: #dcd9d1;
+  --rule-strong: #c2beb4;
+  --accent: #1d1c1a;
+  --accent-soft: #e4e1f2;
+  --ok: #3b6a46;
+  --ok-soft: #dcebdd;
+  --warn: #87581f;
+  --warn-soft: #f3e3cd;
+  --bad: #8c3a3a;
+  --bad-soft: #f3dada;
+  --lilac: #544c86;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d1219;
-    --surface: #141b26;
-    --sunken: #111822;
-    --ink: #e4e9f1;
-    --ink-soft: #c4ccd9;
-    --muted: #909bae;
-    --rule: #253145;
-    --accent: #90a8f2;
-    --accent-soft: #1b2644;
-    --ok: #62c38f;
-    --ok-soft: #132a1f;
-    --warn: #e4ac52;
-    --warn-soft: #2c2314;
-    --bad: #f27884;
-    --bad-soft: #321a1f;
+  :root:not([data-theme="light"]) {
+    --page: #141413;
+    --surface: #1b1b19;
+    --sunken: #232321;
+    --ink: #ebe9e3;
+    --ink-soft: #c7c4bc;
+    --muted: #8f8c84;
+    --rule: #302f2b;
+    --rule-strong: #46443f;
+    --accent: #ebe9e3;
+    --accent-soft: #2a2741;
+    --ok: #a2d1ad;
+    --ok-soft: #1f3025;
+    --warn: #e6bf8e;
+    --warn-soft: #36291a;
+    --bad: #e8a8a8;
+    --bad-soft: #3a2424;
+    --lilac: #bdb6ea;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --page: #141413;
+  --surface: #1b1b19;
+  --sunken: #232321;
+  --ink: #ebe9e3;
+  --ink-soft: #c7c4bc;
+  --muted: #8f8c84;
+  --rule: #302f2b;
+  --rule-strong: #46443f;
+  --accent: #ebe9e3;
+  --accent-soft: #2a2741;
+  --ok: #a2d1ad;
+  --ok-soft: #1f3025;
+  --warn: #e6bf8e;
+  --warn-soft: #36291a;
+  --bad: #e8a8a8;
+  --bad-soft: #3a2424;
+  --lilac: #bdb6ea;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -48,6 +74,7 @@
   --color-ink-soft: var(--ink-soft);
   --color-muted: var(--muted);
   --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-ok: var(--ok);
@@ -56,11 +83,70 @@
   --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-lilac: var(--lilac);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
   background: var(--page);
   color: var(--ink);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
+.theme-to-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-to-light {
+  display: inline;
+}
+
+:root[data-theme="dark"] .theme-to-dark {
+  display: none;
+}
+
+.legal h2 {
+  margin: 2.25rem 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.legal p,
+.legal li {
+  color: var(--ink-soft);
+  max-width: 68ch;
+}
+
+.legal p {
+  margin: 0.6rem 0;
+}
+
+.legal ul {
+  margin: 0.6rem 0;
+  padding-left: 1.2rem;
+  list-style: disc;
+}
+
+.legal li {
+  margin: 0.3rem 0;
+}
+
+.legal a {
+  color: var(--ink);
+  text-decoration: underline;
 }

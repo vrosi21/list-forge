@@ -110,10 +110,29 @@ class BrandConfig(BaseModel):
 
 
 class BrandSummary(BaseModel):
+    """What a visitor needs to choose a brand: who it writes for and the rules it follows."""
+
     model_config = ConfigDict(frozen=True)
 
     id: str
     name: str
+    audience: str | None = None
+    voice: str = ""
+    do: list[str] = Field(default_factory=list)
+    dont: list[str] = Field(default_factory=list)
+    source: str | None = None
+
+    @classmethod
+    def from_config(cls, brand: "BrandConfig") -> "BrandSummary":
+        return cls(
+            id=brand.id,
+            name=brand.name,
+            audience=brand.audience,
+            voice=" ".join(brand.voice.split()),
+            do=list(brand.do),
+            dont=list(brand.dont),
+            source=brand.source,
+        )
 
 
 class GeneratedCopy(BaseModel):

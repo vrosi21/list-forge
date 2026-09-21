@@ -4,14 +4,15 @@ import { useState } from "react";
 
 interface AccessCodeFormProps {
   onSubmit: (code: string) => void;
+  submitLabel?: string;
 }
 
-export function AccessCodeForm({ onSubmit }: AccessCodeFormProps) {
+export function AccessCodeForm({ onSubmit, submitLabel = "Use code" }: AccessCodeFormProps) {
   const [code, setCode] = useState("");
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-lg border border-warn/40 bg-warn-soft p-4"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (code.trim() !== "") {
@@ -19,25 +20,24 @@ export function AccessCodeForm({ onSubmit }: AccessCodeFormProps) {
         }
       }}
     >
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-ink">Access code</span>
+      <label className="flex flex-col gap-1.5 text-sm">
+        <span className="text-muted">Access code</span>
         <input
           value={code}
           onChange={(event) => setCode(event.target.value)}
-          placeholder="the code from your invitation link"
-          className="w-72 rounded border border-rule bg-surface px-3 py-2 text-sm"
+          placeholder="from your invitation link"
+          autoComplete="off"
+          spellCheck={false}
+          className="w-64 rounded border border-rule bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:font-sans placeholder:text-muted"
         />
       </label>
       <button
         type="submit"
-        className="rounded bg-accent px-4 py-2 text-sm font-semibold text-surface"
+        disabled={code.trim() === ""}
+        className="rounded bg-accent px-4 py-2 text-sm font-medium text-page disabled:opacity-40"
       >
-        Use code
+        {submitLabel}
       </button>
-      <p className="w-full text-xs text-muted">
-        Generating copy calls a paid model, so the demo is limited to invited reviewers. Reading
-        an existing batch needs no code.
-      </p>
     </form>
   );
 }

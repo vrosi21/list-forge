@@ -267,3 +267,52 @@ class TestDemoLimits:
             guarded_upload(guarded_client, "a1")
 
         assert guarded_upload(guarded_client, "b2").status_code == 202
+
+
+class TestAccessStatus:
+    def test_an_open_deployment_needs_no_code(self, client: TestClient) -> None:
+        body = client.get("/access").json()
+
+        assert body["required"] is False
+        assert body["valid"] is True
+
+    def test_a_known_code_reports_its_runs(self, guarded_client: TestClient) -> None:
+        body = guarded_client.get("/access", headers={"x-demo-code": "a1"}).json()
+
+        assert body == {
+            "required": True,
+            "valid": True,
+            "runs_remaining": 2,
+            "runs_per_day": 2,
+            "max_rows": 1,
+        }
+
+    def test_checking_a_code_spends_nothing(self, guarded_client: TestClient) -> None:
+        for _ in range(5):
+            guarded_client.get("/access", headers={"x-demo-code": "a1"})
+
+        assert guarded_upload(guarded_client, "a1").status_code == 202
+
+    def test_a_spent_run_is_reflected(self, guarded_client: TestClient) -> None:
+        guarded_upload(guarded_client, "a1")
+
+        body = guarded_client.get("/access", headers={"x-demo-code": "a1"}).json()
+
+        assert body["runs_remaining"] == 1
+
+    @pytest.mark.parametrize("headers", [{}, {"x-demo-code": "nope"}], ids=["missing", "unknown"])
+    def test_a_bad_code_is_reported_without_an_error(
+        self, guarded_client: TestClient, headers: dict[str, str]
+    ) -> None:
+        response = guarded_client.get("/access", headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["valid"] is False
+        assert response.json()["runs_remaining"] is None
+
+
+def test_brands_describe_their_voice(client: TestClient) -> None:
+    brands = client.get("/brands").json()
+
+    assert all(brand["voice"] for brand in brands)
+    assert all("dont" in brand for brand in brands)

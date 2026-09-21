@@ -1,5 +1,5 @@
 const USD_FRACTION_DIGITS = 4;
-const EMPTY = "—";
+const EMPTY = "n/a";
 
 const integers = new Intl.NumberFormat("en-GB");
 const timestamps = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });

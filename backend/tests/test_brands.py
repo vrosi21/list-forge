@@ -61,3 +61,22 @@ def test_brands_are_listed_by_name_and_broken_files_are_skipped(brands_dir: Path
         "beads-and-stones",
         "mindful-souls",
     ]
+
+
+def test_a_listed_brand_carries_what_a_visitor_needs_to_choose_it(brands_dir: Path) -> None:
+    summary = next(item for item in list_brands(brands_dir) if item.id == "mindful-souls")
+
+    assert summary.voice == "Calm and concrete."
+    assert summary.do == ["Name the stone"]
+    assert summary.dont == ["No medical claims"]
+
+
+def test_the_voice_is_collapsed_to_one_line(tmp_path: Path) -> None:
+    directory = tmp_path / "brands"
+    directory.mkdir()
+    (directory / "spaced.toml").write_text(
+        'id = "spaced"\nname = "Spaced"\nvoice = """\nFirst line.\n\n   Second line.\n"""\n',
+        encoding="utf-8",
+    )
+
+    assert list_brands(directory)[0].voice == "First line. Second line."

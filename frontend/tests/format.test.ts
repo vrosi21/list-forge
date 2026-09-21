@@ -6,9 +6,9 @@ describe("formatUsd", () => {
     { value: "0.0123456", expected: "$0.0123" },
     { value: "0", expected: "$0.0000" },
     { value: "1.5", expected: "$1.5000" },
-    { value: null, expected: "—" },
-    { value: undefined, expected: "—" },
-    { value: "not a number", expected: "—" },
+    { value: null, expected: "n/a" },
+    { value: undefined, expected: "n/a" },
+    { value: "not a number", expected: "n/a" },
   ])("formats $value", ({ value, expected }) => {
     expect(formatUsd(value)).toBe(expected);
   });
@@ -17,10 +17,10 @@ describe("formatUsd", () => {
 describe("formatFact", () => {
   it.each([
     { value: ["amethyst", "quartz"], expected: "amethyst, quartz" },
-    { value: [], expected: "—" },
+    { value: [], expected: "n/a" },
     { value: "brazil", expected: "brazil" },
-    { value: "", expected: "—" },
-    { value: null, expected: "—" },
+    { value: "", expected: "n/a" },
+    { value: null, expected: "n/a" },
     { value: 40, expected: "40" },
   ])("formats $value", ({ value, expected }) => {
     expect(formatFact(value)).toBe(expected);

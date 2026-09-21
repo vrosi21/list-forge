@@ -45,6 +45,14 @@ class BatchCreated(BaseModel):
     batch_id: str
 
 
+class AccessStatus(BaseModel):
+    required: bool
+    valid: bool
+    runs_remaining: int | None = None
+    runs_per_day: int | None = None
+    max_rows: int | None = None
+
+
 class BatchTotals(BaseModel):
     prompt_tokens: int = 0
     cached_prompt_tokens: int = 0
@@ -78,13 +86,18 @@ def client_address(request: Request, *, trust_proxy: bool) -> str:
     return request.client.host if request.client else UNKNOWN_CLIENT
 
 
+def enforce_rate_limit(request: Request, services: ServicesDep) -> None:
+    limiter = services.rate_limiter
+    if limiter is None:
+        return
+    address = client_address(request, trust_proxy=services.settings.trust_proxy_headers)
+    if not limiter.take(address):
+        raise HTTPException(TOO_MANY_REQUESTS, "too many requests, try again shortly")
+
+
 def guard_spend(request: Request, services: ServicesDep) -> str:
     """Everything that protects the provider key, in the order that costs least to reject."""
-    limiter = services.rate_limiter
-    if limiter is not None:
-        address = client_address(request, trust_proxy=services.settings.trust_proxy_headers)
-        if not limiter.take(address):
-            raise HTTPException(TOO_MANY_REQUESTS, "too many requests, try again shortly")
+    enforce_rate_limit(request, services)
 
     label = services.access.label_for(request.headers.get(ACCESS_HEADER))
     if label is None:
@@ -137,6 +150,19 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/brands")
     def brands(services: ServicesDep) -> list[BrandSummary]:
         return list_brands(services.settings.brands_dir)
+
+    @app.get("/access", dependencies=[Depends(enforce_rate_limit)])
+    def access(request: Request, services: ServicesDep) -> AccessStatus:
+        """Whether a code would be accepted, without spending any of its runs."""
+        label = services.access.label_for(request.headers.get(ACCESS_HEADER))
+        budget = services.daily_budget
+        return AccessStatus(
+            required=services.access.required,
+            valid=label is not None,
+            runs_remaining=budget.remaining(label) if label is not None else None,
+            runs_per_day=budget.limit,
+            max_rows=services.settings.demo_max_rows,
+        )
 
     @app.post("/batches", status_code=ACCEPTED)
     async def create_batch(
