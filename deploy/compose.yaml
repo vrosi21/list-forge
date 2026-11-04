@@ -15,23 +15,16 @@ services:
       - api-data:/data
     expose:
       - "8000"
+    networks:
+      proxy:
+        aliases:
+          - listforge-api
     logging: *logging
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - api
-    logging: *logging
+networks:
+  proxy:
+    name: n8n_default
+    external: true
 
 volumes:
   api-data:
-  caddy-data:
-  caddy-config:

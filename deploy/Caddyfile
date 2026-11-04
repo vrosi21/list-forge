@@ -1,4 +1,4 @@
 listforge.duckdns.org {
 	encode zstd gzip
-	reverse_proxy api:8000
+	reverse_proxy listforge-api:8000
 }
