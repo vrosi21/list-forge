@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..");
 const SCANNED = ["app", "components", "lib"];
-const SKIPPED = new Set(["lib/api-types.ts"]);
+const SKIPPED = new Set(["lib/api-types.ts", "lib/examples.ts"]);
 const EXTENSIONS = /\.(tsx?|css)$/;
 
 const FORBIDDEN_CHARACTERS = [

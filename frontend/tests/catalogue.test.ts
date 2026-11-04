@@ -5,6 +5,8 @@ import {
   filledRows,
   missingRequired,
   row,
+  rowFromFacts,
+  summariseRow,
   toCsv,
   withCell,
   withEmptyRow,
@@ -94,5 +96,40 @@ describe("missingRequired", () => {
 
   it("finds nothing missing in the sample", () => {
     expect(missingRequired(SAMPLE_ROWS)).toEqual([]);
+  });
+});
+
+describe("summariseRow", () => {
+  it.each([
+    { name: "empty row", values: {}, expected: "" },
+    { name: "single stone", values: { stones: "amethyst" }, expected: "amethyst" },
+    {
+      name: "lists and units",
+      values: { stones: "a; b", size_mm: "35", weight_g: "60", price_eur: "18.50" },
+      expected: "a, b · 35 mm · 60 g · EUR 18.50",
+    },
+    { name: "one piece", values: { pieces: "1" }, expected: "1 piece" },
+    { name: "several pieces", values: { pieces: "7" }, expected: "7 pieces" },
+    { name: "blank cells skipped", values: { origin: "  ", colours: "pink" }, expected: "pink" },
+  ])("summarises a $name", ({ values, expected }) => {
+    expect(summariseRow(row(values))).toBe(expected);
+  });
+});
+
+describe("rowFromFacts", () => {
+  it("turns lists into semicolon cells and missing values into empty cells", () => {
+    expect(
+      rowFromFacts({
+        sku: "S-1",
+        name: "Sphere",
+        stones: ["rose quartz", "amethyst"],
+        colours: [],
+        size_mm: "35",
+        weight_g: null,
+        pieces: 1,
+      }),
+    ).toEqual(
+      row({ sku: "S-1", name: "Sphere", stones: "rose quartz; amethyst", size_mm: "35", pieces: "1" }),
+    );
   });
 });

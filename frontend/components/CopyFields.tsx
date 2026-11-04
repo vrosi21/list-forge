@@ -12,7 +12,7 @@ function tooltip(findings: readonly Finding[]): string {
   return findings.map((finding) => `${finding.check}: ${finding.message}`).join("\n");
 }
 
-function Marked({ segments }: { segments: readonly Segment[] }) {
+export function MarkedText({ segments }: { segments: readonly Segment[] }) {
   return (
     <>
       {segments.map((segment, index) =>
@@ -48,7 +48,7 @@ export function CopyFields({ copy, findings }: CopyFieldsProps) {
             {formatFieldName(field)}
           </dt>
           <dd className="text-sm leading-relaxed text-ink">
-            <Marked segments={segmentField(text, byField.get(field) ?? [])} />
+            <MarkedText segments={segmentField(text, byField.get(field) ?? [])} />
           </dd>
         </div>
       ))}

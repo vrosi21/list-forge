@@ -1,3 +1,5 @@
+import type { ProductFacts } from "@/lib/api";
+
 export const COLUMNS = [
   { key: "sku", label: "SKU", hint: "Unique id", width: "w-28" },
   { key: "name", label: "Name", hint: "Product name", width: "w-64" },
@@ -110,6 +112,44 @@ export function missingRequired(rows: readonly CatalogueRow[]): number[] {
   return rows.flatMap((current, index) =>
     current.sku.trim() === "" || current.name.trim() === "" ? [index] : [],
   );
+}
+
+const SUMMARY_FIELDS: ReadonlyArray<readonly [ColumnKey, (value: string) => string]> = [
+  ["stones", (value) => value],
+  ["colours", (value) => value],
+  ["materials", (value) => value],
+  ["size_mm", (value) => `${value} mm`],
+  ["weight_g", (value) => `${value} g`],
+  ["pieces", (value) => (value === "1" ? "1 piece" : `${value} pieces`)],
+  ["origin", (value) => value],
+  ["price_eur", (value) => `EUR ${value}`],
+];
+
+export function summariseRow(product: CatalogueRow): string {
+  return SUMMARY_FIELDS.flatMap(([key, render]) => {
+    const value = product[key].trim();
+    return value === "" ? [] : [render(value.replace(/\s*;\s*/g, ", "))];
+  }).join(" · ");
+}
+
+export function rowFromFacts(facts: ProductFacts): CatalogueRow {
+  const text = (value: string | number | null | undefined) =>
+    value === null || value === undefined ? "" : String(value);
+  const list = (values: readonly string[] | undefined) => (values ?? []).join("; ");
+
+  return row({
+    sku: facts.sku,
+    name: facts.name,
+    product_type: text(facts.product_type),
+    stones: list(facts.stones),
+    colours: list(facts.colours),
+    materials: list(facts.materials),
+    size_mm: text(facts.size_mm),
+    weight_g: text(facts.weight_g),
+    pieces: text(facts.pieces),
+    origin: text(facts.origin),
+    price_eur: text(facts.price_eur),
+  });
 }
 
 function csvField(value: string): string {
