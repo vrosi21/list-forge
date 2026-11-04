@@ -47,8 +47,8 @@ export function CatalogueEditor({ maxRows, busy, disabled, onRun }: CatalogueEdi
     <details className="group rounded border border-rule bg-surface">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm">
         <span>
-          <span className="font-medium text-ink">Or edit the example table</span>
-          <span className="ml-2 text-muted">No file needed. Change any cell and run it.</span>
+          <span className="font-medium text-ink">Edit a table here</span>
+          <span className="ml-2 text-muted">No file needed. Starts with example rows you can change.</span>
         </span>
         <span className="text-xs text-muted group-open:hidden">Show</span>
         <span className="hidden text-xs text-muted group-open:inline">Hide</span>
