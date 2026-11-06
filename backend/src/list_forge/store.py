@@ -1,4 +1,4 @@
-"""SQLite persistence for batches, items and cached generations.
+"""SQLite persistence for batches, items, cached generations and the run log.
 
 Queryable facts live in columns; the validated object itself is stored as JSON and
 re-validated on the way out, so the database is treated as another untrusted boundary.
@@ -11,7 +11,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from list_forge.models import Batch, Generation, Item, ProductFacts, Status
+from list_forge.models import (
+    Batch,
+    Generation,
+    Item,
+    ProductFacts,
+    RunKind,
+    Status,
+    UsageSummary,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS batches (
@@ -41,6 +49,17 @@ CREATE TABLE IF NOT EXISTS generations (
     prompt_fingerprint TEXT NOT NULL,
     created_at         TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS runs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    access_label   TEXT NOT NULL,
+    kind           TEXT NOT NULL,
+    target_id      TEXT NOT NULL,
+    product_count  INTEGER NOT NULL,
+    created_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS runs_by_label ON runs (access_label, created_at);
 """
 
 INTERRUPTED = "interrupted by a restart"
@@ -158,6 +177,42 @@ class Store:
                     datetime.now(tz=UTC).isoformat(),
                 ),
             )
+
+    def record_run(
+        self,
+        label: str,
+        kind: RunKind,
+        target_id: str,
+        product_count: int,
+        *,
+        at: datetime | None = None,
+    ) -> None:
+        """One row per started batch or regeneration, kept across restarts."""
+        created_at = at or datetime.now(tz=UTC)
+        with self._write() as connection:
+            connection.execute(
+                "INSERT INTO runs (access_label, kind, target_id, product_count, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (label, kind.value, target_id, product_count, created_at.isoformat()),
+            )
+
+    def usage_by_label(self, since: datetime | None = None) -> list[UsageSummary]:
+        """Runs per access code, most recently active first."""
+        rows = self._connection.execute(
+            "SELECT access_label AS label,"
+            " SUM(kind = ?) AS batches,"
+            " SUM(kind = ?) AS regenerations,"
+            " SUM(product_count) AS products,"
+            " MAX(created_at) AS last_run_at"
+            " FROM runs WHERE created_at >= ?"
+            " GROUP BY access_label ORDER BY last_run_at DESC",
+            (
+                RunKind.BATCH.value,
+                RunKind.REGENERATE.value,
+                (since or datetime.min.replace(tzinfo=UTC)).isoformat(),
+            ),
+        ).fetchall()
+        return [UsageSummary.model_validate(dict(row)) for row in rows]
 
     def _item_row(self, item: Item) -> tuple[str, str, int, str, str, str, str]:
         return (
