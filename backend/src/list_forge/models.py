@@ -27,6 +27,11 @@ class Status(StrEnum):
     FAILED = "failed"
 
 
+class RunKind(StrEnum):
+    BATCH = "batch"
+    REGENERATE = "regenerate"
+
+
 class Severity(StrEnum):
     BLOCK = "block"
     WARN = "warn"
@@ -237,3 +242,15 @@ class Batch(BaseModel):
     brand_id: str
     source_name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
+
+
+class UsageSummary(BaseModel):
+    """What one access code has started, counted from the run log."""
+
+    model_config = ConfigDict(frozen=True)
+
+    label: str
+    batches: int = Field(ge=0)
+    regenerations: int = Field(ge=0)
+    products: int = Field(ge=0)
+    last_run_at: datetime

@@ -1,9 +1,10 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from fakes import VALID_COPY, sample_facts, sample_params
-from list_forge.models import Batch, GeneratedCopy, Generation, Status, TokenUsage
+from list_forge.models import Batch, GeneratedCopy, Generation, RunKind, Status, TokenUsage
 from list_forge.store import INTERRUPTED, Store
 
 
@@ -122,3 +123,64 @@ def test_a_second_store_reads_what_the_first_one_wrote(tmp_path: Path) -> None:
         assert second.cached_generation("key") is not None
     finally:
         second.close()
+
+
+NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
+
+
+class TestRunLog:
+    def test_nothing_recorded_means_no_usage(self, store: Store) -> None:
+        assert store.usage_by_label() == []
+
+    def test_runs_are_counted_per_code_and_kind(self, store: Store) -> None:
+        store.record_run("alice", RunKind.BATCH, "b1", 5, at=NOW)
+        store.record_run("alice", RunKind.BATCH, "b2", 3, at=NOW + timedelta(minutes=1))
+        store.record_run("alice", RunKind.REGENERATE, "i1", 1, at=NOW + timedelta(minutes=2))
+        store.record_run("bob", RunKind.BATCH, "b3", 2, at=NOW)
+
+        usage = {summary.label: summary for summary in store.usage_by_label()}
+
+        assert (usage["alice"].batches, usage["alice"].regenerations) == (2, 1)
+        assert usage["alice"].products == 9
+        assert usage["alice"].last_run_at == NOW + timedelta(minutes=2)
+        assert (usage["bob"].batches, usage["bob"].regenerations, usage["bob"].products) == (
+            1,
+            0,
+            2,
+        )
+
+    def test_the_most_recently_active_code_comes_first(self, store: Store) -> None:
+        store.record_run("alice", RunKind.BATCH, "b1", 1, at=NOW)
+        store.record_run("bob", RunKind.BATCH, "b2", 1, at=NOW + timedelta(hours=1))
+
+        assert [summary.label for summary in store.usage_by_label()] == ["bob", "alice"]
+
+    @pytest.mark.parametrize(
+        ("since", "expected"),
+        [
+            (None, 2),
+            (NOW - timedelta(days=1), 1),
+            (NOW + timedelta(days=1), 0),
+        ],
+    )
+    def test_a_start_date_leaves_older_runs_out(
+        self, store: Store, since: datetime | None, expected: int
+    ) -> None:
+        store.record_run("alice", RunKind.BATCH, "old", 1, at=NOW - timedelta(days=30))
+        store.record_run("alice", RunKind.BATCH, "new", 1, at=NOW)
+
+        batches = sum(summary.batches for summary in store.usage_by_label(since))
+
+        assert batches == expected
+
+    def test_the_log_survives_a_restart(self, tmp_path: Path) -> None:
+        path = tmp_path / "runs.db"
+        first = Store(path)
+        first.record_run("alice", RunKind.BATCH, "b1", 1, at=NOW)
+        first.close()
+
+        second = Store(path)
+        try:
+            assert [summary.label for summary in second.usage_by_label()] == ["alice"]
+        finally:
+            second.close()

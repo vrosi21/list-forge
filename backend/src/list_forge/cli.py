@@ -6,7 +6,7 @@ import logging
 import sys
 from collections import Counter
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from openai import APIStatusError, AuthenticationError
@@ -21,11 +21,12 @@ from list_forge.llm import (
     build_client,
     build_generator,
 )
-from list_forge.models import BrandConfig, Item, Status, TokenUsage
+from list_forge.models import BrandConfig, Item, Status, TokenUsage, UsageSummary
 from list_forge.pipeline import Pipeline
 from list_forge.pricing import estimate_cost_usd
 from list_forge.prompts import PROMPT_VERSIONS
 from list_forge.services import build_services
+from list_forge.store import Store
 from list_forge.vocabulary import VocabularyError
 
 PREVIEW_ROWS = 5
@@ -47,6 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "brands":
         return _run_brands(settings)
+    if args.command == "usage":
+        return _run_usage(settings, args.days)
     if args.command == "check":
         return asyncio.run(_run_check(settings))
     if args.command == "run":
@@ -72,6 +75,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("brands", help="list configured brands")
     commands.add_parser("check", help="verify the model provider is reachable")
+
+    usage = commands.add_parser("usage", help="runs started per access code")
+    usage.add_argument("--days", type=int, default=None, help="only the last N days")
 
     inspect = commands.add_parser("inspect", help="validate a product CSV against a brand")
     _add_catalog_arguments(inspect)
@@ -102,6 +108,33 @@ def _run_brands(settings: Settings) -> int:
     for summary in list_brands(settings.brands_dir):
         print(f"{summary.id:<24} {summary.name}")
     return EXIT_OK
+
+
+def _run_usage(settings: Settings, days: int | None) -> int:
+    since = datetime.now(tz=UTC) - timedelta(days=days) if days is not None else None
+    store = Store(settings.database_path)
+    try:
+        summaries = store.usage_by_label(since)
+    finally:
+        store.close()
+
+    for line in format_usage(summaries):
+        print(line)
+    return EXIT_OK
+
+
+def format_usage(summaries: Sequence[UsageSummary]) -> list[str]:
+    """A fixed-width table, or one line saying there is nothing to show."""
+    if not summaries:
+        return ["no runs recorded"]
+
+    header = f"{'code':<20} {'batches':>8} {'regenerations':>14} {'products':>9}  last run (UTC)"
+    rows = [
+        f"{summary.label:<20} {summary.batches:>8} {summary.regenerations:>14}"
+        f" {summary.products:>9}  {summary.last_run_at.astimezone(UTC):%Y-%m-%d %H:%M}"
+        for summary in summaries
+    ]
+    return [header, *rows]
 
 
 async def _run_check(settings: Settings) -> int:

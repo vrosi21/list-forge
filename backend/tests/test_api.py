@@ -12,6 +12,7 @@ from list_forge.api import create_app
 from list_forge.budgets import DailyBudget
 from list_forge.cache import CachedGenerator
 from list_forge.config import Settings
+from list_forge.models import UsageSummary
 from list_forge.pipeline import Pipeline
 from list_forge.services import ProviderStatus, Services
 from list_forge.store import Store
@@ -181,6 +182,15 @@ class TestRegenerate:
         assert response.json()["id"] == item_id
         assert len(generator.seen) == 2
 
+    def test_it_is_recorded_against_the_code(self, client: TestClient) -> None:
+        batch_id = upload(client)
+        item_id = client.get(f"/batches/{batch_id}").json()["items"][0]["id"]
+
+        client.post(f"/items/{item_id}/regenerate")
+
+        [summary] = recorded_usage(client)
+        assert (summary.label, summary.batches, summary.regenerations) == ("open", 1, 1)
+
     def test_an_unknown_item_is_missing(self, client: TestClient) -> None:
         assert client.post("/items/nope/regenerate").status_code == 404
 
@@ -222,6 +232,42 @@ def guarded_upload(client: TestClient, code: str | None, rows: str = AMETHYST):
         data={"brand_id": "mindful-souls"},
         headers=headers,
     )
+
+
+def recorded_usage(client: TestClient) -> list[UsageSummary]:
+    return client.app.state.services.store.usage_by_label()
+
+
+class TestUsageLog:
+    def test_a_started_batch_is_recorded_against_its_code(self, guarded_client: TestClient) -> None:
+        guarded_upload(guarded_client, "a1")
+        guarded_upload(guarded_client, "b2")
+        guarded_upload(guarded_client, "b2")
+
+        usage = {summary.label: summary.batches for summary in recorded_usage(guarded_client)}
+
+        assert usage == {"alice": 1, "bob": 2}
+
+    def test_the_product_count_is_recorded(self, guarded_client: TestClient) -> None:
+        guarded_upload(guarded_client, "a1")
+
+        [summary] = recorded_usage(guarded_client)
+        assert summary.products == 1
+
+    @pytest.mark.parametrize(
+        ("code", "rows"),
+        [
+            (None, AMETHYST),
+            ("wrong", AMETHYST),
+            ("a1", f"{AMETHYST}\n{ROSE_QUARTZ}"),
+        ],
+    )
+    def test_a_refused_request_records_nothing(
+        self, guarded_client: TestClient, code: str | None, rows: str
+    ) -> None:
+        assert guarded_upload(guarded_client, code, rows).status_code >= 400
+
+        assert recorded_usage(guarded_client) == []
 
 
 class TestAccessCodes:
